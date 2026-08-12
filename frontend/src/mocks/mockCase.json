@@ -1,0 +1,320 @@
+{
+  "_note": "HAND-WRITTEN PHASE-A FIXTURE. Every value here — including the source URLs, fees and thresholds — is illustrative mock data used to build and demo the UI before any backend exists. Nothing in this file has been retrieved from or verified against a live government source. It is replaced wholesale by real agent output in Phase C.",
+
+  "case_state": {
+    "case_id": "case_mock_coffee_riyadh_001",
+    "goal": "I want to open a specialty coffee shop in Al-Olaya, Riyadh.",
+    "business_type": "food_beverage_fixed",
+    "city": "Riyadh",
+    "district": "Al-Olaya",
+    "area_sqm_stated": 120,
+    "area_sqm_from_document": 95,
+    "budget_sar": 350000,
+    "expected_annual_revenue_sar": 450000,
+    "readiness_pct": 68,
+    "vat_registration_required": true,
+    "approval_stage": "none",
+
+    "requirements": [
+      {
+        "name": "Commercial Registration (CR)",
+        "status": "missing",
+        "evidence": {
+          "claim": "A commercial registration must be issued through the Saudi Business Center before municipal licensing can proceed.",
+          "source_entity": "Saudi Business Center",
+          "source_url": "https://business.sa/en/services/commercial-registration",
+          "retrieved_at": "2026-08-12T09:14:22Z",
+          "confidence": "HIGH",
+          "has_explicit_url": true
+        }
+      },
+      {
+        "name": "Municipal commercial licence (Balady)",
+        "status": "missing",
+        "evidence": {
+          "claim": "A commercial activity licence is required from the municipality for food and beverage premises.",
+          "source_entity": "Balady",
+          "source_url": "https://balady.gov.sa/en/services/commercial-license-issuance",
+          "retrieved_at": "2026-08-12T09:15:03Z",
+          "confidence": "HIGH",
+          "has_explicit_url": true
+        }
+      },
+      {
+        "name": "VAT registration (ZATCA)",
+        "status": "missing",
+        "evidence": {
+          "claim": "Businesses with annual taxable supplies exceeding SAR 375,000 must register for VAT.",
+          "source_entity": "ZATCA",
+          "source_url": "https://zatca.gov.sa/en/RulesRegulations/Taxes/Pages/VAT-registration.aspx",
+          "retrieved_at": "2026-08-12T09:15:41Z",
+          "confidence": "HIGH",
+          "has_explicit_url": true
+        }
+      },
+      {
+        "name": "Food-handling compliance (SFDA)",
+        "status": "unverified",
+        "evidence": {
+          "claim": "Food establishments are subject to food-safety requirements administered by the SFDA.",
+          "source_entity": "SFDA",
+          "source_url": "https://sfda.gov.sa/en/food-establishments",
+          "retrieved_at": "2026-08-12T09:16:12Z",
+          "confidence": "MEDIUM",
+          "has_explicit_url": true
+        }
+      },
+      {
+        "name": "GOSI employer registration",
+        "status": "unverified",
+        "evidence": null
+      },
+      {
+        "name": "Premises area meets municipal minimum",
+        "status": "unverified",
+        "evidence": null
+      }
+    ],
+
+    "evidence_log": [
+      {
+        "claim": "A commercial registration must be issued through the Saudi Business Center before municipal licensing can proceed.",
+        "source_entity": "Saudi Business Center",
+        "source_url": "https://business.sa/en/services/commercial-registration",
+        "retrieved_at": "2026-08-12T09:14:22Z",
+        "confidence": "HIGH",
+        "has_explicit_url": true
+      },
+      {
+        "claim": "A commercial activity licence is required from the municipality for food and beverage premises.",
+        "source_entity": "Balady",
+        "source_url": "https://balady.gov.sa/en/services/commercial-license-issuance",
+        "retrieved_at": "2026-08-12T09:15:03Z",
+        "confidence": "HIGH",
+        "has_explicit_url": true
+      },
+      {
+        "claim": "Businesses with annual taxable supplies exceeding SAR 375,000 must register for VAT.",
+        "source_entity": "ZATCA",
+        "source_url": "https://zatca.gov.sa/en/RulesRegulations/Taxes/Pages/VAT-registration.aspx",
+        "retrieved_at": "2026-08-12T09:15:41Z",
+        "confidence": "HIGH",
+        "has_explicit_url": true
+      },
+      {
+        "claim": "Food establishments are subject to food-safety requirements administered by the SFDA.",
+        "source_entity": "SFDA",
+        "source_url": "https://sfda.gov.sa/en/food-establishments",
+        "retrieved_at": "2026-08-12T09:16:12Z",
+        "confidence": "MEDIUM",
+        "has_explicit_url": true
+      },
+      {
+        "claim": "The municipal licence fee for a small food premises is approximately SAR 1,000 per year.",
+        "source_entity": "Balady",
+        "source_url": "",
+        "retrieved_at": "2026-08-12T09:16:48Z",
+        "confidence": "LOW",
+        "has_explicit_url": false
+      },
+      {
+        "claim": "Coffee shops in Riyadh require a separate tourism licence.",
+        "source_entity": "unattributed",
+        "source_url": "",
+        "retrieved_at": "2026-08-12T09:17:02Z",
+        "confidence": "LOW",
+        "has_explicit_url": false
+      },
+      {
+        "claim": "14 establishments serving coffee were found within 500 m of the stated district centroid.",
+        "source_entity": "OpenStreetMap Overpass",
+        "source_url": "https://overpass-api.de/api/interpreter",
+        "retrieved_at": "2026-08-12T09:17:30Z",
+        "confidence": "MEDIUM",
+        "has_explicit_url": true
+      }
+    ],
+
+    "conflicts": [
+      {
+        "conflict_id": "conf_area_001",
+        "field": "area_sqm",
+        "field_label": "Premises area (sqm)",
+        "stated_value": 120,
+        "stated_source": "Intake form — value entered by applicant",
+        "document_value": 95,
+        "document_source": "lease-al-olaya.pdf — clause 3.1, extracted text layer",
+        "detected_by": "verifier",
+        "status": "open",
+        "resolution": null
+      }
+    ],
+
+    "decision_log": [
+      "Intake & Planner: extracted business_category=food_beverage_fixed, city=Riyadh, district=Al-Olaya from the applicant's goal. No fields inferred.",
+      "Intake & Planner: branch selected — food_business.",
+      "Regulation Router: searched 4 allowlisted domains (business.sa, mc.gov.sa, balady.gov.sa, zatca.gov.sa). 4 requirements retrieved with explicit URLs.",
+      "Regulation Router: GOSI employer registration — no allowlisted source found. Marked unverified rather than answered from memory.",
+      "Municipal & Location (A2A): Balady requirements retrieved. Municipal approval status: NOT VERIFIED — approval can only be confirmed by Balady directly.",
+      "Municipal & Location (A2A): AI ESTIMATE — competitor count only, not a suitability judgment. 14 coffee-serving establishments within 500 m.",
+      "Tax / Financial: deterministic assessment — SAR 450,000 expected revenue exceeds the SAR 375,000 mandatory threshold. Result: mandatory_registration_likely.",
+      "Verifier: 5 evidence objects accepted, 2 rejected for missing explicit source URLs. Rejected claims removed from the report entirely.",
+      "Verifier: DISCREPANCY — area_sqm_stated (120) does not match area_sqm_from_document (95). Readiness frozen pending human resolution."
+    ]
+  },
+
+  "artifacts": {
+    "journey": [
+      {
+        "order": 1,
+        "title": "Issue Commercial Registration (CR)",
+        "agency": "Saudi Business Center",
+        "description": "Register the commercial entity and obtain the CR number that every downstream service depends on.",
+        "estimated_duration": null
+      },
+      {
+        "order": 2,
+        "title": "Register the National Address",
+        "agency": "Not verified",
+        "description": "Required before municipal licensing. The registration path was not confirmed against an allowlisted source — verify directly before relying on this step.",
+        "estimated_duration": null
+      },
+      {
+        "order": 3,
+        "title": "Apply for the municipal commercial licence",
+        "agency": "Balady",
+        "description": "Submit the commercial-activity licence application for the food and beverage premises at Al-Olaya.",
+        "estimated_duration": null
+      },
+      {
+        "order": 4,
+        "title": "Satisfy SFDA food-handling requirements",
+        "agency": "SFDA",
+        "description": "Food-safety requirements apply to the premises. Retrieved at MEDIUM confidence — confirm the specific obligations for a coffee establishment.",
+        "estimated_duration": null
+      },
+      {
+        "order": 5,
+        "title": "Register for VAT",
+        "agency": "ZATCA",
+        "description": "Expected annual revenue of SAR 450,000 exceeds the SAR 375,000 mandatory registration threshold.",
+        "estimated_duration": null
+      },
+      {
+        "order": 6,
+        "title": "Register as an employer with GOSI",
+        "agency": "Not verified",
+        "description": "No allowlisted source was found for this requirement. It is listed because it is commonly applicable, but it is unverified and must be confirmed directly.",
+        "estimated_duration": null
+      }
+    ],
+
+    "checklist": [
+      { "name": "Commercial Registration (CR)", "status": "missing", "note": "Blocks every later step." },
+      { "name": "Municipal commercial licence (Balady)", "status": "missing" },
+      { "name": "VAT registration (ZATCA)", "status": "missing", "note": "Mandatory — revenue above threshold." },
+      { "name": "Food-handling compliance (SFDA)", "status": "unverified", "note": "MEDIUM confidence source." },
+      { "name": "GOSI employer registration", "status": "unverified", "note": "No allowlisted source found." },
+      { "name": "Premises area meets municipal minimum", "status": "unverified", "note": "Blocked by the unresolved area discrepancy." }
+    ],
+
+    "evidence_report": [
+      {
+        "claim": "A commercial registration must be issued through the Saudi Business Center before municipal licensing can proceed.",
+        "source_entity": "Saudi Business Center",
+        "source_url": "https://business.sa/en/services/commercial-registration",
+        "retrieved_at": "2026-08-12T09:14:22Z",
+        "confidence": "HIGH",
+        "verdict": "accepted"
+      },
+      {
+        "claim": "A commercial activity licence is required from the municipality for food and beverage premises.",
+        "source_entity": "Balady",
+        "source_url": "https://balady.gov.sa/en/services/commercial-license-issuance",
+        "retrieved_at": "2026-08-12T09:15:03Z",
+        "confidence": "HIGH",
+        "verdict": "accepted"
+      },
+      {
+        "claim": "Businesses with annual taxable supplies exceeding SAR 375,000 must register for VAT.",
+        "source_entity": "ZATCA",
+        "source_url": "https://zatca.gov.sa/en/RulesRegulations/Taxes/Pages/VAT-registration.aspx",
+        "retrieved_at": "2026-08-12T09:15:41Z",
+        "confidence": "HIGH",
+        "verdict": "accepted"
+      },
+      {
+        "claim": "Food establishments are subject to food-safety requirements administered by the SFDA.",
+        "source_entity": "SFDA",
+        "source_url": "https://sfda.gov.sa/en/food-establishments",
+        "retrieved_at": "2026-08-12T09:16:12Z",
+        "confidence": "MEDIUM",
+        "verdict": "accepted"
+      },
+      {
+        "claim": "14 establishments serving coffee were found within 500 m of the stated district centroid.",
+        "source_entity": "OpenStreetMap Overpass",
+        "source_url": "https://overpass-api.de/api/interpreter",
+        "retrieved_at": "2026-08-12T09:17:30Z",
+        "confidence": "MEDIUM",
+        "verdict": "accepted"
+      },
+      {
+        "claim": "The municipal licence fee for a small food premises is approximately SAR 1,000 per year.",
+        "source_entity": "Balady",
+        "source_url": "",
+        "retrieved_at": "2026-08-12T09:16:48Z",
+        "confidence": "LOW",
+        "verdict": "rejected",
+        "reason": "No explicit source URL. has_explicit_url = false — claim stripped from the report."
+      },
+      {
+        "claim": "Coffee shops in Riyadh require a separate tourism licence.",
+        "source_entity": "unattributed",
+        "source_url": "",
+        "retrieved_at": "2026-08-12T09:17:02Z",
+        "confidence": "LOW",
+        "verdict": "rejected",
+        "reason": "Not traceable to an allowlisted domain. Rejected rather than softened or rephrased."
+      }
+    ],
+
+    "fee_estimate": {
+      "line_items": [
+        {
+          "label": "Commercial Registration issuance",
+          "amount_sar": 1200,
+          "is_official": true,
+          "source": "https://business.sa/en/services/commercial-registration"
+        },
+        {
+          "label": "Municipal commercial licence",
+          "amount_sar": 0,
+          "is_official": false,
+          "source": "Fee could not be verified — the retrieved figure was rejected by the Verifier for lacking an explicit URL."
+        },
+        { "label": "Premises fit-out and equipment", "amount_sar": 210000, "is_official": false },
+        { "label": "Initial inventory", "amount_sar": 35000, "is_official": false },
+        { "label": "Contingency (15%)", "amount_sar": 37000, "is_official": false }
+      ],
+      "official_total_sar": 1200,
+      "estimated_total_sar": 282000
+    },
+
+    "application_packet": {
+      "target_service": "Commercial activity licence — food and beverage premises",
+      "target_agency": "Balady",
+      "fields": [
+        { "label": "Business activity", "value": "Specialty coffee shop (food & beverage, fixed premises)", "source": "Intake form" },
+        { "label": "City", "value": "Riyadh", "source": "Intake form" },
+        { "label": "District", "value": "Al-Olaya", "source": "Intake form" },
+        { "label": "Premises area (sqm)", "value": "UNRESOLVED — 120 stated vs 95 in lease document", "source": "Conflict conf_area_001" },
+        { "label": "Applicant status", "value": "Saudi national", "source": "Intake form" },
+        { "label": "VAT registration required", "value": "Yes — revenue above SAR 375,000 threshold", "source": "ZATCA (deterministic assessment)" }
+      ],
+      "disclaimer": "Municipal approval status: NOT VERIFIED — approval can only be confirmed by Balady directly. This packet is a draft assembled from verified evidence only; it is not a submission and confers no approval."
+    },
+
+    "decision_log": []
+  }
+}

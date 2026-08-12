@@ -1,0 +1,32 @@
+[project]
+name = "case-officer"
+version = "0.1.0"
+description = "GovFlow KSA — Case Officer service: main LangGraph (Intake+Planner, Regulation Router, Tax/Financial, Verifier, Documentation)"
+authors = [
+    { name = "tala", email = "223410047@psu.edu.sa" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.141.1",
+    "fastmcp>=3.4.7",
+    "httpx>=0.28.1",
+    "langchain-openai>=1.4.3",
+    "langgraph>=1.2.11",
+    "langsmith>=0.10.18",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
+    "pymupdf>=1.28.2",
+    "python-dotenv>=1.2.2",
+    "tavily-python>=0.7.27",
+    "uvicorn>=0.52.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

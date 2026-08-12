@@ -1,0 +1,28 @@
+# GovFlow KSA — two independently runnable backend services.
+#
+# Per-service env_file directives are the point of the per-service .env layout
+# (handoff doc section 3): the municipal service never receives the Case
+# Officer's LangSmith or MCP auth secrets.
+#
+# Not used during Phase A (frontend runs standalone against the mock server).
+
+services:
+  case-officer:
+    build:
+      context: ./backend/case-officer
+      dockerfile: ../../Dockerfile.case-officer
+    env_file:
+      - ./backend/case-officer/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/gov_corpus:/app/data/gov_corpus:ro
+
+  municipal-location:
+    build:
+      context: ./backend/municipal-location
+      dockerfile: ../../Dockerfile.municipal
+    env_file:
+      - ./backend/municipal-location/.env
+    ports:
+      - "8001:8001"

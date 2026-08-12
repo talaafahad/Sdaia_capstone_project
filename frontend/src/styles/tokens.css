@@ -1,0 +1,79 @@
+/**
+ * Design tokens — implementation plan section 12.
+ * Every colour in the app resolves to a variable declared here.
+ */
+
+:root {
+  /* --- Primary: sage green --- */
+  --sage-base: #87a08c;
+  --sage-deep: #6b8570;
+  --sage-tint: #b8cbb9;
+
+  /* --- Secondary: lavender (accent only, never a dominant field) --- */
+  --lav-base: #b8a9d9;
+  --lav-deep: #8e7bb5;
+  --lav-tint: #e4dcf1;
+
+  /* --- Neutral base --- */
+  --neutral-bg: #faf9f6;
+  --surface: #ffffff;
+  --charcoal: #2b2b2b;
+  --charcoal-muted: #5f5f5f;
+  --charcoal-faint: #8a8a8a;
+  --hairline: #e6e4de;
+
+  /* --- Status colours: deliberately outside the theme palette so
+         "satisfied" never reads as ambiguous against the sage UI --- */
+  --status-ok: #4a9b6e;
+  --status-warn: #d9a441;
+  --status-alert: #c0564b;
+  --status-ok-tint: #e6f2ec;
+  --status-warn-tint: #fbf2df;
+  --status-alert-tint: #f7e6e4;
+
+  /* --- Typography --- */
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue',
+    Arial, 'Noto Sans Arabic', sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.875rem;
+
+  /* --- Spacing / shape --- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(43, 43, 43, 0.06);
+  --shadow-md: 0 4px 16px rgba(43, 43, 43, 0.08);
+  --shadow-lg: 0 12px 40px rgba(43, 43, 43, 0.16);
+
+  --sidebar-w: 300px;
+  --content-max: 1420px;
+}
+
+/**
+ * Full-bleed background layer — implementation plan section 12:
+ * "low-opacity (8-12%) background illustration behind the whole app shell,
+ * sage-green-tinted."
+ *
+ * Hand-drawn Najdi-style geometric motif as an inline SVG data URI. Drawn here
+ * rather than sourced from a photo library so there is no licensing question
+ * (section 12's caveat) and it composites cleanly with the sage/lavender palette.
+ */
+:root {
+  --bg-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%236B8570' stroke-width='1.1'%3E%3Cpath d='M60 4 L116 60 L60 116 L4 60 Z'/%3E%3Cpath d='M60 24 L96 60 L60 96 L24 60 Z'/%3E%3Cpath d='M60 44 L76 60 L60 76 L44 60 Z'/%3E%3Cpath d='M4 60 L24 60 M96 60 L116 60 M60 4 L60 24 M60 96 L60 116'/%3E%3Cpath d='M0 0 L4 60 L0 120 M120 0 L116 60 L120 120'/%3E%3C/g%3E%3C/svg%3E");
+  --bg-pattern-opacity: 0.1;
+}
