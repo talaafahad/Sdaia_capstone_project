@@ -25,5 +25,9 @@ class Settings(BaseSettings):
     # Self-issued secret gating the mock Balady submission tool (Phase 5).
     mcp_auth_secret: str | None = None
 
+    # Corpus location. Defaults to <repo>/data/gov_corpus; overridden in the
+    # container, where docker-compose mounts it at /app/data/gov_corpus.
+    gov_corpus_dir: str | None = None
+
 
 settings = Settings()  # type: ignore[call-arg]
