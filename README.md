@@ -16,19 +16,29 @@ all.
 
 - [The problem](#the-problem)
 - [The solution](#the-solution)
+- [Solution or agent design](#solution-or-agent-design)
 - [Why this is hard: the hallucination problem](#why-this-is-hard-the-hallucination-problem)
 - [System architecture](#system-architecture)
+- [Architecture diagram](#architecture-diagram)
 - [The agent hierarchy](#the-agent-hierarchy)
+- [How the agent works](#how-the-agent-works)
 - [Agent reference](#agent-reference)
 - [Model assignment per node](#model-assignment-per-node)
 - [The retrieval architecture](#the-retrieval-architecture)
 - [Human-in-the-loop gates](#human-in-the-loop-gates)
 - [The frontend](#the-frontend)
 - [Repository layout](#repository-layout)
+- [Agent stack](#agent-stack)
 - [How to run](#how-to-run)
+- [Usage](#usage)
+- [Example output](#example-output)
 - [Verifying the backend is connected to the frontend](#verifying-the-backend-is-connected-to-the-frontend)
 - [Testing](#testing)
 - [Known limitations](#known-limitations)
+- [Demo](#demo)
+- [Future work](#future-work)
+- [Team](#team)
+- [Course information](#course-information)
 
 ---
 
@@ -89,6 +99,38 @@ exact answer.
 an allowed domain, the requirement is marked `unverified — no allowlisted source
 found`. There is no code path where an empty retrieval produces a cited claim,
 because the "no sources" branch never reaches a model at all.
+
+---
+
+## Solution or agent design
+
+What the system receives, what the agent does, and what it produces:
+
+```text
+User submits a one-sentence goal + structured intake fields
+                    ↓
+        Intake & Planner extracts structured case data
+                    ↓
+   Regulation Router retrieves requirements from allowlisted
+              government sources only
+                    ↓
+   Municipal & Location (A2A) and Tax / Financial (deterministic
+              Python) run in parallel
+                    ↓
+   Verifier audits every claim; unresolved conflicts trigger a
+              human-in-the-loop decision
+                    ↓
+   Documentation agent assembles six artifacts from only the
+              claims the Verifier accepted
+                    ↓
+User receives a cited, step-by-step government journey — Journey,
+Checklist, Evidence Report, Fee Estimate, Application Packet, Decision Log
+```
+
+No claim reaches the last step unless it survived retrieval from an
+allowlisted domain **and** the Verifier's audit — see
+[Why this is hard](#why-this-is-hard-the-hallucination-problem) for how that's
+enforced in code, not just in the prompt.
 
 ---
 
@@ -179,6 +221,33 @@ boundary real rather than conventional. Its allowlist contains only
 municipal node cannot produce a ZATCA citation — the domain is not reachable
 from that process.
 
+### Architecture diagram
+
+```mermaid
+flowchart TD
+    U[User] --> FE[Frontend — React + Vite :5173]
+    FE -- SSE + REST --> CO[Case Officer :8000 — LangGraph]
+
+    CO --> IP[Intake & Planner]
+    IP --> RR[Regulation & Service Router — 5 sub-nodes]
+
+    RR --> ML[Municipal & Location]
+    RR --> TF[Tax / Financial — plain Python, no LLM]
+
+    ML -- A2A delegation --> MS[Municipal & Location service :8001]
+
+    ML --> V[Verifier — hallucination firewall]
+    TF --> V
+
+    V --> HG{Conflicts?}
+    HG -- yes --> CR[Human: conflict resolution gate]
+    CR --> V
+    HG -- no --> AG[Human: approval gate]
+
+    AG --> DOC[Documentation — 6 artifacts]
+    DOC --> FE
+```
+
 ---
 
 ## The agent hierarchy
@@ -253,6 +322,36 @@ combined through explicit LangGraph reducers. `municipal_location` and
 `tax_financial` run in parallel and both append to `requirements` and
 `evidence_log`; without additive reducers one would silently erase the other's
 findings.
+
+---
+
+## How the agent works
+
+What it receives, what it decides, what tools it uses, what it produces:
+
+```text
+User Request (intake form + optional lease PDF)
+     ↓
+Case Officer (LangGraph StateGraph)
+ ├── Intake & Planner       — extracts fields; no tools, no guessing
+ ├── Regulation Router      — search_gov_sources (Tavily, domain-locked)
+ │                            + local corpus hybrid search (BM25 + dense)
+ ├── Municipal & Location   — delegates over A2A to an independent service
+ ├── Tax / Financial        — deterministic Python, zero LLM in the decision
+ ├── Verifier               — audits every claim; detects document conflicts
+ └── Documentation          — assembles artifacts from accepted evidence only
+     ↓
+Human-in-the-loop gates (conflict resolution, then approval) — both are
+LangGraph interrupt() pauses, not suggestions a model could skip
+     ↓
+Six Artifacts: Journey · Checklist · Evidence Report · Fee Estimate ·
+Application Packet Draft · Decision Log
+```
+
+Every decision that touches a citation or a number is either grounded in a
+retrieved, allowlisted source or computed in plain code — never generated from
+the model's own training knowledge. See [Agent reference](#agent-reference) for
+the tools, model, and hard rules behind each node.
 
 ---
 
@@ -545,6 +644,41 @@ Sdaia_capstone_project/
 
 ---
 
+## Agent stack
+
+```text
+LLM:
+OpenRouter (Nemotron model family — nano-9b, super-120b, ultra-550b, embed-1b)
+
+Agent Framework:
+LangGraph (StateGraph, explicit reducers, interrupt() for human-in-the-loop gates)
+
+Agent Protocol:
+A2A (Agent Card discovery + delegation, Municipal & Location service)
+
+API:
+FastAPI (Case Officer :8000, Municipal & Location :8001), Server-Sent Events for live agent status
+
+Tools:
+Tavily (allowlisted web search), FastMCP (auth-gated execution adapter), PyMuPDF (lease PDF extraction)
+
+Retrieval:
+Hybrid BM25 + dense embeddings (Reciprocal Rank Fusion) over a 16-page verified government corpus
+
+Observability:
+LangSmith (optional, full run tracing)
+
+Frontend:
+React 18 + Vite + Tailwind
+```
+
+Why these choices: search is Tavily specifically because it supports
+`include_domains`, which is the actual anti-hallucination enforcement point —
+not a general-purpose search API. Tax/VAT logic deliberately has **no LLM in
+the decision path** — see [Agent reference](#agent-reference) for why.
+
+---
+
 ## How to run
 
 ### Prerequisites
@@ -634,17 +768,6 @@ cd /Users/talaalothaim/Desktop/Sdaia_capstone_project
 (cd frontend                   && npm run dev)
 ```
 
-### Running a case
-
-1. Click **Fill in the intake form** (or use a suggested case on the hero).
-2. Required: goal, category, city, district, applicant status, area (sqm),
-   expected annual revenue.
-3. **Upload a lease PDF whose stated area differs from what you typed** — this
-   is what makes the discrepancy gate fire, and it is the centrepiece of the
-   demo. The backend parses it with PyMuPDF and shows the extracted area.
-4. **Analyse My Case** → watch the roster.
-5. Resolve the conflict → approve at the gate → artifacts render.
-
 ### Expect a long first run
 
 The free Nemotron tier **queues roughly 60–70 seconds per call**, even for a
@@ -683,6 +806,58 @@ cd backend/case-officer && uv run python scripts/collect_corpus.py
 
 Re-fetches all 16 pages and rewrites `data/gov_corpus/` with fresh provenance
 timestamps. Only allowlisted URLs are permitted; the script refuses anything else.
+
+---
+
+## Usage
+
+Once all three services are running (see [How to run](#how-to-run)):
+
+1. Open http://localhost:5173 and fill in the intake form — goal, category,
+   city, district, applicant status, area, and expected annual revenue.
+2. Optionally upload a lease PDF whose stated area differs from what you
+   typed, to see the discrepancy-detection gate fire. The backend parses it
+   with PyMuPDF and shows the extracted area.
+3. Click **Analyse My Case** and watch the agent roster update live.
+4. Resolve any conflict, approve at the gate, and the six artifacts render.
+
+Or drive it directly via the API:
+
+```bash
+curl -s localhost:8000/api/cases -H 'Content-Type: application/json' \
+  -d '{"intake":{"goal":"open a coffee shop","business_category":"food_beverage_fixed",
+       "city":"Riyadh","district":"Al-Olaya","applicant_status":"saudi_national",
+       "area_sqm_stated":120,"expected_annual_revenue_sar":450000}}'
+```
+
+This returns a `case_id` — stream its progress with:
+
+```bash
+curl -N localhost:8000/api/cases/<case_id>/stream
+```
+
+---
+
+## Example output
+
+<!-- Add 3–4 screenshots here: the intake form, the live Agent Activity roster
+     mid-run, the conflict-resolution modal (lease vs. stated area), and the
+     final artifact view (Journey / Evidence Report). Save images under
+     assets/ and reference them below. -->
+
+### Live agent roster
+
+![Agent roster](assets/agent-roster.png)
+
+### Conflict resolution gate
+
+![Conflict gate](assets/conflict-gate.png)
+
+### Evidence report
+
+Each accepted requirement lists its source entity, URL, and retrieval
+timestamp; rejected claims are shown too, with their rejection reason — the
+Verifier's work is only legible if you can see what it threw away.
 
 ---
 
@@ -822,6 +997,51 @@ thing this project is arguing against.
    fetched and held in state but have no component yet.
 10. **Not legal advice.** Every output is a research aid pointing at official
     sources, and says so.
+
+---
+
+## Demo
+
+Presentation deck: `docs/Bosalah_Capstone.pptx`
+
+<!-- If you record a walkthrough video, add the link here:
+Demo: https://youtube.com/... -->
+
+---
+
+## Future work
+
+- Extend `category_map.py` beyond the two tested verticals (food & beverage,
+  food truck) and validate each new category end to end rather than assuming
+  the architecture generalises untested.
+- Build a corpus for cities beyond Riyadh so live search isn't the only path
+  outside the capital.
+- Wire the two remaining artifacts (checklist, fee estimate) to frontend
+  components — they're already computed and held in state.
+- Replace `MemorySaver` with persistent checkpointing so a case survives a
+  backend restart.
+- Resolve an SFDA corpus source once a text-extractable page is available, so
+  food safety isn't live-search-only.
+
+---
+
+## Team
+
+| Member | GitHub | Contribution |
+|---|---|---|
+| Tala Alothaim |  @talaafahad | Backend | 
+| Sadeem Alnassar | @ksadeem992-art | Data |
+| Raghad Alotaibi | @RaghadAlotaibi00 | frontend |
+|Tala Alothaim, Raghad Alotaibi, Sadeem Alnassar | Testing |
+
+---
+
+## Course information
+
+Built as the capstone project for **Advanced Agentic AI Systems Engineering**
+(هندسة أنظمة الذكاء الاصطناعي الوكيلي المتقدمة), SDAIA Academy, August 2026.
+
+SDAIA Academy: https://github.com/SDAIAAcademy
 
 ---
 
