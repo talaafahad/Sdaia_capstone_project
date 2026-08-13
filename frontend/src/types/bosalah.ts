@@ -60,47 +60,6 @@ export interface AuditEntry {
   severity: AuditSeverity
 }
 
-// ─── Evidence panel ───────────────────────────────────────────────────────────
-
-export type EvidenceType = 'regulation' | 'municipal' | 'financial' | 'document' | 'web'
-
-export interface EvidenceItem {
-  id: string
-  type: EvidenceType
-  claim: string
-  source: string
-  /** Clickable source URL. Empty string for a claim the Verifier rejected. */
-  reference: string
-  excerpt: string
-  /**
-   * 0..1. EvidencePanel renders this as five dots and filters on `>= 0.8`, so
-   * the backend's HIGH/MEDIUM/LOW is mapped to a number in `lib/adapters.ts`.
-   * A claim the Verifier rejected scores 0.
-   */
-  confidence: number
-  agentName: string
-  timestamp: string
-}
-
-// ─── Journey timeline ─────────────────────────────────────────────────────────
-
-export type JourneyStepStatus = 'done' | 'active' | 'blocked' | 'upcoming'
-
-export interface JourneySubStep {
-  label: string
-  done: boolean
-}
-
-export interface JourneyStep {
-  id: string
-  label: string
-  description: string
-  status: JourneyStepStatus
-  agentName?: string
-  completedAt?: string
-  subSteps?: JourneySubStep[]
-}
-
 // ─── Action gate ──────────────────────────────────────────────────────────────
 
 export type ActionGateType =

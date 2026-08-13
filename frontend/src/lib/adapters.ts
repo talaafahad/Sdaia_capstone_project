@@ -24,19 +24,12 @@ import type {
   AuditEntry,
   AuditSeverity,
   ConflictData,
-  EvidenceItem,
-  EvidenceType,
   FormValues,
-  JourneyStep,
-  JourneyStepStatus,
 } from '../types/bosalah'
 import type {
   BackendAgentStatus,
   Conflict,
-  Evidence,
   IntakePayload,
-  JourneyStepArtifact,
-  RequirementStatus,
 } from '../types/caseState'
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -125,70 +118,6 @@ export function parseTimestamp(raw: string): Date | null {
 export function formatClock(raw: string): string {
   const date = parseTimestamp(raw)
   return date ? date.toLocaleTimeString(undefined, { hour12: false }) : '--:--:--'
-}
-
-// ─── Evidence -> EvidencePanel ────────────────────────────────────────────────
-
-const ENTITY_TYPE: Record<string, EvidenceType> = {
-  Balady: 'municipal',
-  'Ministry of Municipalities and Housing': 'municipal',
-  ZATCA: 'financial',
-  'Saudi Business Center': 'regulation',
-  'Ministry of Commerce': 'regulation',
-  SFDA: 'regulation',
-  GOSI: 'regulation',
-  Qiwa: 'regulation',
-  HRSD: 'regulation',
-  SAIP: 'regulation',
-  'OpenStreetMap Overpass': 'web',
-}
-
-function evidenceType(entity: string, path?: string | null): EvidenceType {
-  if (ENTITY_TYPE[entity]) return ENTITY_TYPE[entity]
-  return path === 'corpus_fallback' ? 'document' : 'web'
-}
-
-/** EvidencePanel draws five dots from a 0..1 score and filters on `>= 0.8`. */
-const CONFIDENCE_SCORE: Record<string, number> = { HIGH: 0.95, MEDIUM: 0.65, LOW: 0.35 }
-
-export function toEvidenceItems(evidence: Evidence[]): EvidenceItem[] {
-  return evidence.map((e, i) => ({
-    id: `${e.source_url || 'no-url'}-${i}`,
-    type: evidenceType(e.source_entity, e.retrieval_path),
-    claim: e.claim,
-    source: e.source_entity,
-    reference: e.source_url,
-    // Surfacing WHY a claim was rejected is the point of the Verifier; without
-    // it a rejected row looks identical to one that was simply never checked.
-    excerpt: e.has_explicit_url
-      ? `Retrieved via ${e.retrieval_path === 'corpus_fallback' ? 'pre-verified corpus' : 'live search'}.`
-      : `REJECTED — ${e.rejection_reason ?? 'no explicit source URL'}`,
-    // A rejected claim scores 0 so it can never be counted as high-confidence.
-    confidence: e.has_explicit_url ? (CONFIDENCE_SCORE[e.confidence] ?? 0.35) : 0,
-    agentName: 'Verifier',
-    timestamp: e.retrieved_at,
-  }))
-}
-
-// ─── Requirements / journey -> JourneyTimeline ────────────────────────────────
-
-const STATUS_TO_STEP: Record<RequirementStatus, JourneyStepStatus> = {
-  satisfied: 'done',
-  missing: 'active',
-  unverified: 'blocked',
-}
-
-export function toJourneySteps(
-  journey: JourneyStepArtifact[],
-  statusByName: Record<string, RequirementStatus>,
-): JourneyStep[] {
-  return journey.map(step => ({
-    id: String(step.order),
-    label: step.title,
-    description: step.description,
-    status: STATUS_TO_STEP[statusByName[step.title] ?? 'unverified'] ?? 'upcoming',
-    agentName: step.agency,
-  }))
 }
 
 // ─── Decision log -> AuditLog ─────────────────────────────────────────────────

@@ -10,7 +10,6 @@ import ApprovalModal from './components/ApprovalModal'
 import ConflictModal from './components/ConflictModal'
 import ActionGateModal from './components/ActionGateModal'
 import AuditLog from './components/AuditLog'
-import EvidencePanel from './components/EvidencePanel'
 import RegulationsFound from './components/RegulationsFound'
 import YourPath from './components/YourPath'
 
@@ -37,7 +36,6 @@ import {
   resolveSide,
   toAuditEntries,
   toConflictData,
-  toEvidenceItems,
   toIntakePayload,
   toUiAgentStatus,
 } from './lib/adapters'
@@ -239,7 +237,6 @@ export default function App() {
     [agents],
   )
 
-  const evidenceItems = useMemo(() => toEvidenceItems(caseState.evidence_log), [caseState.evidence_log])
   const auditEntries = useMemo(() => toAuditEntries(trace), [trace])
 
   const gateAction: ActionGateItem | null = useMemo(() => {
@@ -394,7 +391,6 @@ export default function App() {
 
       <RegulationsFound requirements={caseState.requirements} />
       <YourPath requirements={caseState.requirements} />
-      {evidenceItems.length > 0 && <EvidencePanel evidence={evidenceItems} />}
 
       <Footer />
 
