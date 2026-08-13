@@ -687,15 +687,17 @@ the decision path** — see [Agent reference](#agent-reference) for why.
 |---|---|
 | [uv](https://docs.astral.sh/uv/) | Python dependency management |
 | Node.js 18+ | Frontend |
-| An [OpenRouter](https://openrouter.ai) API key | All model calls |
-| A [Tavily](https://tavily.com) API key | Allowlisted live search |
-| *(optional)* LangSmith key | Tracing |
+| An [OpenRouter](https://openrouter.ai) API key | LLM model calls |
+| A [Tavily](https://tavily.com) API key | Allowlisted government-source search |
+| *(optional)* LangSmith API key | Run tracing and observability |
 
-### For GitHub users — from a fresh clone
+### 1. Clone the repository
 
 ```bash
-git clone <repo-url> && cd Sdaia_capstone_project
-```
+git clone <repository-url>
+cd Sdaia_capstone_project
+
+
 
 **1. Configure secrets.** Three `.env` files, one per service — each service gets
 only the secrets it needs:
