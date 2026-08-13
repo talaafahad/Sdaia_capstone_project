@@ -1029,10 +1029,9 @@ Demo: https://youtube.com/... -->
 
 | Member | GitHub | Contribution |
 |---|---|---|
-| Tala Alothaim |  @talaafahad | Backend | 
-| Sadeem Alnassar | @ksadeem992-art | Data |
-| Raghad Alotaibi | @RaghadAlotaibi00 | frontend |
-|Tala Alothaim, Raghad Alotaibi, Sadeem Alnassar | Testing |
+| Tala Alothaim | [@talaafahad](https://github.com/talaafahad) | Backend, Testing |
+| Sadeem Alnassar | [@ksadeem992-art](https://github.com/ksadeem992-art) | Data, Testing |
+| Raghad Alotaibi | [@RaghadAlotaibi00](https://github.com/RaghadAlotaibi00) | Frontend, Testing |
 
 ---
 
