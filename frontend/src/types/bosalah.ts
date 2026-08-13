@@ -112,7 +112,12 @@ export interface ActionGateItem {
   id: string
   type: ActionGateType
   title: string
-  summary: string
+  /**
+   * Key/value pairs rendered as the "What will be submitted" table. MUST be an
+   * object: the modal calls Object.entries() on it, so passing a string walks
+   * it character by character and renders one numbered row per letter.
+   */
+  summary: Record<string, string | number>
   description: string
   /** Risks the user must tick before the action can proceed. */
   consequences: string[]

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ShieldAlert, AlertTriangle, CheckCircle2, X } from 'lucide-react'
 import type { ActionGateItem, ActionGateType } from '../types/bosalah'
+import ErrorBoundary from './ErrorBoundary'
 
 // ─── Gate type config ────────────────────────────────────────────────────────
 
@@ -96,7 +97,8 @@ export default function ActionGateModal({
             >
               <GateIcon size={20} style={{ color: cfg.color }} />
             </div>
-            <button onClick={onCancel}>
+            {/* Always rendered, outside the body boundary. */}
+            <button onClick={onCancel} aria-label="Close" title="Close">
               <X size={18} style={{ color: '#616161' }} />
             </button>
           </div>
@@ -117,7 +119,10 @@ export default function ActionGateModal({
           </p>
         </div>
 
-        {/* ── Scrollable body ── */}
+        {/* ── Scrollable body ──
+            Wrapped in a boundary so a fault in the summary/risk rendering
+            cannot take the modal (and its close controls) down with it. */}
+        <ErrorBoundary label="Submission details">
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
 
           {/* Summary table */}
@@ -221,8 +226,12 @@ export default function ActionGateModal({
             />
           </div>
         </div>
+        </ErrorBoundary>
 
-        {/* ── Footer ── */}
+        {/* ── Footer ──
+            Deliberately OUTSIDE the boundary: "Cancel — go back" must render
+            even when the body fails, so a display fault can never trap the
+            user in a modal with no way out. */}
         <div
           className="px-6 py-4 flex items-center justify-between gap-3"
           style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}

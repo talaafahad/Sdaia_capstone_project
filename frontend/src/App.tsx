@@ -11,7 +11,8 @@ import ConflictModal from './components/ConflictModal'
 import ActionGateModal from './components/ActionGateModal'
 import AuditLog from './components/AuditLog'
 import EvidencePanel from './components/EvidencePanel'
-import JourneyTimeline from './components/JourneyTimeline'
+import RegulationsFound from './components/RegulationsFound'
+import YourPath from './components/YourPath'
 
 import type { ActionGateItem, AgentCard, FormValues } from './types/bosalah'
 import type {
@@ -21,7 +22,6 @@ import type {
   CaseState,
   Conflict,
   DocumentationArtifacts,
-  RequirementStatus,
   UploadedDocument,
 } from './types/caseState'
 import {
@@ -39,7 +39,6 @@ import {
   toConflictData,
   toEvidenceItems,
   toIntakePayload,
-  toJourneySteps,
   toUiAgentStatus,
 } from './lib/adapters'
 
@@ -240,27 +239,27 @@ export default function App() {
     [agents],
   )
 
-  const statusByName = useMemo(() => {
-    const map: Record<string, RequirementStatus> = {}
-    for (const r of caseState.requirements) map[r.name] = r.status
-    return map
-  }, [caseState.requirements])
-
-  const journeySteps = useMemo(
-    () => (artifacts ? toJourneySteps(artifacts.journey, statusByName) : []),
-    [artifacts, statusByName],
-  )
   const evidenceItems = useMemo(() => toEvidenceItems(caseState.evidence_log), [caseState.evidence_log])
   const auditEntries = useMemo(() => toAuditEntries(trace), [trace])
 
   const gateAction: ActionGateItem | null = useMemo(() => {
     if (!artifacts) return null
+    const packet = artifacts.application_packet
+    // Must be an OBJECT — the modal renders it with Object.entries(). Passing
+    // the service name as a plain string produced one numbered row per
+    // character ("12 c", "13 t", "14 i"…).
+    const summary: Record<string, string> = {
+      Service: packet.target_service,
+      Agency: packet.target_agency,
+    }
+    for (const field of packet.fields) summary[field.label] = field.value
+
     return {
       id: caseState.case_id,
       type: 'submit_application',
       title: 'Submit the application packet to Balady',
-      summary: artifacts.application_packet.target_service,
-      description: artifacts.application_packet.disclaimer,
+      summary,
+      description: packet.disclaimer,
       consequences: [
         'This is a MOCK submission — no application is filed with any government agency.',
         'The reference number returned is synthetic and confers no status or approval.',
@@ -393,7 +392,8 @@ export default function App() {
         </div>
       </section>
 
-      {journeySteps.length > 0 && <JourneyTimeline steps={journeySteps} />}
+      <RegulationsFound requirements={caseState.requirements} />
+      <YourPath requirements={caseState.requirements} />
       {evidenceItems.length > 0 && <EvidencePanel evidence={evidenceItems} />}
 
       <Footer />
