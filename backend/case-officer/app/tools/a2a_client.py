@@ -18,7 +18,11 @@ import httpx
 
 MUNICIPAL_SERVICE_URL = os.environ.get("MUNICIPAL_SERVICE_URL", "http://localhost:8001")
 DISCOVERY_TIMEOUT = 5
-CALL_TIMEOUT = 90
+#: The municipal service makes its own LLM call, which on the free tier queues
+#: for 60-70s and may retry through rate-limit backoff. A 90s ceiling timed out
+#: mid-delegation and reported the municipal licence as unverified even though
+#: the remote service was working fine — must exceed the remote's own budget.
+CALL_TIMEOUT = int(os.environ.get("A2A_CALL_TIMEOUT_SECONDS", "300"))
 
 
 @dataclass

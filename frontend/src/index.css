@@ -1,0 +1,229 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Google Font ───────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ─── CSS Custom Properties ─────────────────────────────────────────────── */
+:root {
+  --color-navy-page:     #10122B;
+  --color-navy-card:     #171B3D;
+  --color-navy-elevated: #1E2347;
+
+  --color-purple-base:   #8174C9;
+  --color-purple-active: #9D7CFF;
+  --color-purple-light:  #BEA9FF;
+  --color-purple-tint:   #DFD4FF;
+
+  --color-green-base:    #5BCD84;
+  --color-green-light:   #93DEAE;
+  --color-green-tint:    #C9EED6;
+
+  --color-text-primary:  #F1F1F1;
+  --color-text-muted:    #B0B0B0;
+  --color-text-faint:    #616161;
+
+  --color-status-amber:  #D9A441;
+  --color-status-red:    #C0564B;
+
+  --radius-card: 16px;
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.35);
+  --shadow-glow-purple: 0 0 40px rgba(157,124,255,0.18);
+  --shadow-glow-green:  0 0 40px rgba(91,205,132,0.16);
+  --shadow-glow:        0 0 48px rgba(91,205,132,0.12), 0 0 80px rgba(157,124,255,0.12);
+}
+
+/* ─── Base reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--color-navy-page);
+  color: var(--color-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ─── Dual-colour dot-grid page background ──────────────────────────────── */
+/* Purple dots in a 32px grid, green dots offset by 16px — creates the      */
+/* Saudi green + lavender visual rhythm across the entire page.              */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(circle, rgba(129,116,201,0.12) 1px, transparent 1px),
+    radial-gradient(circle, rgba(91,205,132,0.07)  1px, transparent 1px);
+  background-size:   32px 32px, 32px 32px;
+  background-position: 0 0,     16px 16px;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--color-navy-page); }
+::-webkit-scrollbar-thumb { background: rgba(129,116,201,0.5); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-purple-active); }
+
+/* ─── Focus ring ─────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-purple-active);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── RTL helper ─────────────────────────────────────────────────────────── */
+.rtl-text { direction: rtl; unicode-bidi: isolate; }
+
+/* ─── Glass card ─────────────────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(23, 27, 61, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(129,116,201,0.18);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* ─── Gradient text — purple → green (Saudi palette) ───────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #BEA9FF 0%, #9D7CFF 45%, #5BCD84 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Green gradient text ────────────────────────────────────────────────── */
+.gradient-text-green {
+  background: linear-gradient(135deg, #93DEAE 0%, #5BCD84 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Saudi dual-colour bar ─────────────────────────────────────────────── */
+/* Used for the hero accent bar, section dividers, progress bars etc.       */
+.saudi-bar {
+  background: linear-gradient(to right, #9D7CFF, #5BCD84);
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+
+/* Gentle float for hero compass */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-10px) rotate(3deg); }
+  66%       { transform: translateY(-5px) rotate(-2deg); }
+}
+.animate-float { animation: float 5s ease-in-out infinite; }
+
+/* Spin slow for compass needle */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin-slow { animation: spin-slow 12s linear infinite; }
+
+/* Pulse ring */
+@keyframes pulse-ring {
+  0%   { transform: scale(0.9); opacity: 0.8; }
+  70%  { transform: scale(1.3); opacity: 0; }
+  100% { transform: scale(0.9); opacity: 0; }
+}
+.animate-pulse-ring { animation: pulse-ring 2.5s ease-out infinite; }
+
+/* Working agent bar fill */
+@keyframes bosalah-fill {
+  0%   { width: 0%;   opacity: 0.9; }
+  60%  { width: 80%;  opacity: 1; }
+  100% { width: 100%; opacity: 0.5; }
+}
+.animate-bosalah-fill { animation: bosalah-fill 1.8s ease-in-out infinite; }
+
+/* Working dot pulse */
+@keyframes bosalah-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.7); }
+}
+.animate-bosalah-pulse { animation: bosalah-pulse 1.2s ease-in-out infinite; }
+
+/* Spoke line draw */
+@keyframes draw-line {
+  from { stroke-dashoffset: 300; }
+  to   { stroke-dashoffset: 0; }
+}
+.animate-draw { animation: draw-line 1.2s ease-out forwards; }
+
+/* Fade-up entrance */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.6s ease-out forwards; }
+.animate-fade-up-1 { animation: fade-up 0.6s 0.1s ease-out both; }
+.animate-fade-up-2 { animation: fade-up 0.6s 0.2s ease-out both; }
+.animate-fade-up-3 { animation: fade-up 0.6s 0.3s ease-out both; }
+.animate-fade-up-4 { animation: fade-up 0.6s 0.4s ease-out both; }
+.animate-fade-up-5 { animation: fade-up 0.6s 0.5s ease-out both; }
+
+/* Shimmer for chip hover */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* ─── Input field ────────────────────────────────────────────────────────── */
+.field-input {
+  width: 100%;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: rgba(16, 18, 43, 0.8);
+  border: 1px solid rgba(129,116,201,0.25);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  outline: none;
+}
+.field-input::placeholder { color: var(--color-text-faint); }
+.field-input:hover { border-color: rgba(129,116,201,0.45); }
+.field-input:focus {
+  border-color: var(--color-purple-active);
+  box-shadow: 0 0 0 3px rgba(157,124,255,0.12);
+  background: rgba(16, 18, 43, 1);
+}
+
+/* ─── Section label ──────────────────────────────────────────────────────── */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(129,116,201,0.15);
+}
+
+/* ─── Navbar blur ────────────────────────────────────────────────────────── */
+.navbar-blur {
+  background: rgba(16, 18, 43, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(129,116,201,0.12);
+}
