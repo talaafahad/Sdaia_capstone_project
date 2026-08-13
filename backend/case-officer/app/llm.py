@@ -111,6 +111,34 @@ class RateLimited(ModelUnavailable):
     """The provider returned 429 (or an equivalent quota signal)."""
 
 
+class DailyQuotaExhausted(RateLimited):
+    """The account's per-DAY free-model allowance is spent.
+
+    Distinct from a per-minute throttle because the correct response is the
+    opposite: waiting does not help. OpenRouter's free tier allows 50 requests
+    per day and resets at 00:00 UTC, so backing off 90s per node — and then
+    retrying on the fallback model, which draws from the same account-wide
+    allowance — just turns a fast failure into a slow one.
+    """
+
+
+#: OpenRouter marks the daily cap in the error body, e.g.
+#: "Rate limit exceeded: free-models-per-day" / limit_source
+#: "openrouter_free_tier_daily".
+_DAILY_CAP_MARKERS = (
+    "per-day",
+    "per day",
+    "free_tier_daily",
+    "free-models-per-day",
+    "daily limit",
+)
+
+
+def _is_daily_cap(exc: Exception) -> bool:
+    text = f"{exc} {getattr(exc, 'body', '')}".lower()
+    return any(marker in text for marker in _DAILY_CAP_MARKERS)
+
+
 #: Backoff schedule between attempts on the same model, in seconds. Free-tier
 #: limits are per-minute, so the last step deliberately crosses a minute
 #: boundary rather than hammering a window that has not reset.
@@ -301,6 +329,17 @@ def call_json(
                 return parsed
             except Exception as exc:  # noqa: BLE001 — classified below
                 last_error = exc
+
+                # 0. Daily cap: stop immediately. Neither waiting nor the
+                #    fallback model can help — the allowance is account-wide
+                #    and resets at 00:00 UTC.
+                if _is_daily_cap(exc):
+                    raise DailyQuotaExhausted(
+                        f"{node}: OpenRouter free-tier DAILY quota exhausted "
+                        "(50 requests/day). Waiting will not help — it resets at "
+                        "00:00 UTC. Add credit to raise the cap to 1000/day, or "
+                        "re-run after the reset."
+                    ) from exc
 
                 # 1. Rate limited: wait and retry the SAME model. Switching
                 #    models on a 429 does not help — the quota is per account.

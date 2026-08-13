@@ -39,6 +39,15 @@ RATE_LIMIT_BACKOFF = (5, 20, 65)
 LLM_TIMEOUT_SECONDS = int(os.environ.get("LLM_TIMEOUT_SECONDS", "240"))
 
 
+#: OpenRouter's daily free-model cap. Waiting does not clear it (it resets at
+#: 00:00 UTC), so backing off 90s against it just makes failure slower.
+_DAILY_CAP_MARKERS = ("per-day", "per day", "free_tier_daily", "free-models-per-day", "daily limit")
+
+
+def _is_daily_cap(exc: Exception) -> bool:
+    return any(m in f"{exc}".lower() for m in _DAILY_CAP_MARKERS)
+
+
 def _is_rate_limit(exc: Exception) -> bool:
     status = getattr(exc, "status_code", None)
     if status == 429:
@@ -74,6 +83,8 @@ def _call_json(system: str, user: str, max_tokens: int = 2000):
         try:
             return extract_json(llm.invoke(messages).content)
         except Exception as exc:  # noqa: BLE001 — classified, then re-raised
+            if _is_daily_cap(exc):
+                raise  # waiting cannot help; fail fast with the provider's message
             if _is_rate_limit(exc) and attempt < len(RATE_LIMIT_BACKOFF):
                 time.sleep(RATE_LIMIT_BACKOFF[attempt])
                 attempt += 1

@@ -12,6 +12,7 @@ import pytest
 from app.agents.verifier import verify_evidence
 from app.llm import (
     RATE_LIMIT_BACKOFF,
+    DailyQuotaExhausted,
     ModelUnavailable,
     RateLimited,
     _is_rate_limit,
@@ -364,3 +365,91 @@ class TestCacheKeyStability:
         llm_cache.write(*self.ARGS, {"ok": True})
         monkeypatch.setenv("DISABLE_LLM_CACHE", "1")
         assert llm_cache.read(*self.ARGS) is None
+
+
+class TestDailyCapFailsFast:
+    """A per-day cap and a per-minute throttle need opposite responses.
+
+    Observed live: "Rate limit exceeded: free-models-per-day",
+    X-RateLimit-Limit 50, limit_source openrouter_free_tier_daily, resetting at
+    00:00 UTC. Backing off 90s per node against that — then retrying the
+    fallback model, which draws on the same account-wide allowance — turned a
+    fast failure into a ten-minute one.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_sleeping(self, monkeypatch, tmp_path):
+        self.slept: list[float] = []
+        monkeypatch.setattr(llm_module.time, "sleep", lambda s: self.slept.append(s))
+        monkeypatch.setattr(llm_module, "llm_available", lambda: True)
+        monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path / "llm"))
+        yield
+
+    def _daily_capped(self, monkeypatch):
+        class DailyCapError(Exception):
+            status_code = 429
+
+        class FakeLLM:
+            def invoke(self, _m):
+                raise DailyCapError(
+                    "Rate limit exceeded: free-models-per-day. Add 10 credits to "
+                    "unlock 1000 free model requests per day"
+                )
+
+        monkeypatch.setattr(llm_module, "get_llm", lambda *a, **k: FakeLLM())
+
+    def test_detected_from_the_provider_message(self):
+        assert llm_module._is_daily_cap(Exception("Rate limit exceeded: free-models-per-day"))
+        assert llm_module._is_daily_cap(Exception("limit_source: openrouter_free_tier_daily"))
+
+    def test_a_plain_throttle_is_not_a_daily_cap(self):
+        assert llm_module._is_daily_cap(Exception("429 Too Many Requests")) is False
+
+    def test_raises_daily_quota_exhausted(self, monkeypatch):
+        self._daily_capped(monkeypatch)
+        with pytest.raises(DailyQuotaExhausted):
+            call_json("verifier", "sys", "user")
+
+    def test_does_not_sleep_at_all(self, monkeypatch):
+        """The whole point: no 90s of pointless waiting."""
+        self._daily_capped(monkeypatch)
+        with pytest.raises(DailyQuotaExhausted):
+            call_json("verifier", "sys", "user")
+        assert self.slept == []
+
+    def test_does_not_try_the_fallback_model(self, monkeypatch):
+        """The allowance is account-wide, so Super is capped too."""
+        models = []
+
+        class DailyCapError(Exception):
+            status_code = 429
+
+        class FakeLLM:
+            def invoke(self, _m):
+                raise DailyCapError("Rate limit exceeded: free-models-per-day")
+
+        def fake_get_llm(node, *, max_tokens=4096, model=None):
+            models.append(model)
+            return FakeLLM()
+
+        monkeypatch.setattr(llm_module, "get_llm", fake_get_llm)
+        with pytest.raises(DailyQuotaExhausted):
+            call_json("verifier", "sys", "user")
+        assert len(models) == 1, f"tried {models} — should stop after the first"
+
+    def test_message_is_actionable(self, monkeypatch):
+        self._daily_capped(monkeypatch)
+        with pytest.raises(DailyQuotaExhausted) as exc:
+            call_json("verifier", "sys", "user")
+        text = str(exc.value)
+        assert "00:00 UTC" in text and "Waiting will not help" in text
+
+    def test_still_a_rate_limit_subclass(self):
+        """Callers that catch RateLimited keep working unchanged."""
+        assert issubclass(DailyQuotaExhausted, llm_module.RateLimited)
+
+    def test_nothing_is_cached(self, monkeypatch):
+        self._daily_capped(monkeypatch)
+        with pytest.raises(DailyQuotaExhausted):
+            call_json("verifier", "sys", "user")
+        assert llm_cache.stats()["entries"] == 0
