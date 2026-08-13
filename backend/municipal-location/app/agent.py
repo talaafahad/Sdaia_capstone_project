@@ -31,7 +31,28 @@ def llm_available() -> bool:
     return bool(key) and not any(m in key for m in _PLACEHOLDER_MARKERS)
 
 
+#: Mirrors the Case Officer's schedule. Without this the municipal node was the
+#: only LLM caller in the system with no 429 handling: it failed fast on a rate
+#: limit and reported the municipal licence as unverified, which is
+#: indistinguishable from "Balady published nothing" in the output.
+RATE_LIMIT_BACKOFF = (5, 20, 65)
+LLM_TIMEOUT_SECONDS = int(os.environ.get("LLM_TIMEOUT_SECONDS", "240"))
+
+
+def _is_rate_limit(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None)
+    if status == 429:
+        return True
+    response = getattr(exc, "response", None)
+    if response is not None and getattr(response, "status_code", None) == 429:
+        return True
+    text = f"{exc.__class__.__name__} {exc}".lower()
+    return "ratelimit" in text.replace("_", "").replace(" ", "") or "429" in text
+
+
 def _call_json(system: str, user: str, max_tokens: int = 2000):
+    import time
+
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
 
@@ -43,11 +64,21 @@ def _call_json(system: str, user: str, max_tokens: int = 2000):
         base_url="https://openrouter.ai/api/v1",
         temperature=0,  # citation-touching node — section 7
         max_tokens=max_tokens,
-        timeout=120,
-        max_retries=1,
+        timeout=LLM_TIMEOUT_SECONDS,
+        max_retries=0,  # handled below so a 429 can back off rather than hammer
     )
-    response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
-    return extract_json(response.content)
+    messages = [SystemMessage(content=system), HumanMessage(content=user)]
+
+    attempt = 0
+    while True:
+        try:
+            return extract_json(llm.invoke(messages).content)
+        except Exception as exc:  # noqa: BLE001 — classified, then re-raised
+            if _is_rate_limit(exc) and attempt < len(RATE_LIMIT_BACKOFF):
+                time.sleep(RATE_LIMIT_BACKOFF[attempt])
+                attempt += 1
+                continue
+            raise
 
 
 def municipal_requirements(payload: dict) -> dict:
@@ -56,12 +87,14 @@ def municipal_requirements(payload: dict) -> dict:
     city = payload.get("city") or ""
     district = payload.get("district") or ""
 
-    query = "commercial activity licence requirements municipal"
+    # Broad on purpose. Baking the district or premises area into the query
+    # returns nothing useful: Balady publishes requirements for commercial
+    # premises generally and its pages never name a district or a sqm figure.
+    # Search the requirements broadly; applicability is decided downstream.
+    query = "commercial activity licence requirements conditions documents"
     if category == "food_truck_mobile":
-        query = "mobile cart licence issuance requirements eligibility"
-    outcome = retrieve(
-        f"{query} {city}".strip(), category=category, top_k=5, node="municipal_requirements"
-    )
+        query = "mobile cart licence issuance requirements eligibility conditions"
+    outcome = retrieve(query, category=category, top_k=6, node="municipal_requirements")
 
     result: dict = {
         "requirements": [],
@@ -101,11 +134,15 @@ def municipal_requirements(payload: dict) -> dict:
     )
     user = (
         "RETRIEVED CONTEXT\n=================\n"
-        f"{render_context(outcome.passages)}\n\n"
+        f"{render_context(outcome.passages, query)}\n\n"
         'Produce JSON: {"requirements": [{"name": str, "status": '
         '"satisfied"|"missing"|"unverified", "note": str, "evidence": {"claim": str, '
         '"source_url": str, "confidence": "HIGH"|"MEDIUM"|"LOW"}}], "approval_status": str}\n'
-        "Use only source_url values that appear in the context above."
+        "Use only source_url values that appear in the context above.\n"
+        "Report every municipal requirement the sources state for commercial "
+        "premises. Put any condition that limits when a requirement applies in "
+        "its note — do not omit the requirement because you cannot confirm the "
+        "condition holds for this case."
     )
 
     try:

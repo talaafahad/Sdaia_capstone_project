@@ -71,10 +71,58 @@ class Passage:
         )
 
 
-def render_context(passages) -> str:
+#: Live Balady/momah pages are whole service directories — measured at 52,713
+#: chars, most of it a catalogue of unrelated services (maps, panoramas, vehicle
+#: marking). Sending them whole buried the licence requirements in ~200k chars
+#: of noise and the model reported that no source specified any requirements.
+CONTEXT_WINDOW_CHARS = 1400
+
+
+def relevant_excerpt(query: str, passage: str, width: int = CONTEXT_WINDOW_CHARS) -> str:
+    """The window of a passage most likely to bear on the query.
+
+    Same approach as the Case Officer's Verifier: score windows by term
+    frequency plus adjacent-pair matches, rather than trimming from the start,
+    which on these pages returns the site header every time.
+    """
+    if not passage:
+        return ""
+    if len(passage) <= width:
+        return passage
+
+    words = [w for w in re.findall(r"\w+", (query or "").lower()) if len(w) > 3]
+    terms = set(words)
+    bigrams = {f"{a} {b}" for a, b in zip(words, words[1:])}
+    if not terms:
+        return passage[:width]
+
+    lowered = passage.lower()
+    step = max(width // 6, 1)
+    best_start, best_score = 0, -1.0
+    for start in range(0, max(len(passage) - width, 0) + step, step):
+        window = lowered[start : start + width]
+        score = float(sum(window.count(t) for t in terms))
+        score += 5.0 * sum(window.count(b) for b in bigrams)
+        if score > best_score:
+            best_start, best_score = start, score
+    return passage[best_start : best_start + width]
+
+
+def render_context(passages, query: str = "") -> str:
+    """Prompt context, windowed to the part of each passage that bears on the query."""
     if not passages:
         return "(no passages were retrieved from any allowed domain)"
-    return "\n\n".join(p.as_prompt_block(i + 1) for i, p in enumerate(passages))
+    blocks = []
+    for i, p in enumerate(passages):
+        excerpt = relevant_excerpt(query, p.text) if query else p.text[:CONTEXT_WINDOW_CHARS]
+        blocks.append(
+            f"[{i + 1}] source_entity: {p.source_entity}\n"
+            f"    source_url: {p.source_url}\n"
+            f"    retrieved_at: {p.retrieved_at}\n"
+            f"    origin: {p.origin}\n"
+            f"    text: {excerpt}"
+        )
+    return "\n\n".join(blocks)
 
 
 @dataclass(frozen=True)
