@@ -80,6 +80,11 @@ MODEL_ASSIGNMENTS: dict[str, ModelChoice] = {
         "section 1 says drop THIS node to Super first under rate-limit contention.",
         SUPER,
     ),
+    "additional_context": ModelChoice(
+        NANO_30B,
+        "Summarises open-web pages that are explicitly NOT evidence. Low stakes "
+        "by construction, so it does not warrant a large model.",
+    ),
     "documentation": ModelChoice(
         NANO_30B, "Templating-heavy with light reasoning; 256K context suits the assembly."
     ),

@@ -64,6 +64,21 @@ export interface Conflict {
   resolution?: ConflictResolution | null
 }
 
+/**
+ * Open-web reference from the additional_context node. NOT Evidence: it is not
+ * citable, cannot satisfy a requirement, and cannot affect readiness_pct. The
+ * backend pins confidence to LOW and is_official to false at the schema level.
+ */
+export interface SupplementaryItem {
+  claim: string
+  source_url: string
+  source_domain: string
+  title?: string
+  retrieved_at: string
+  confidence: 'LOW'
+  is_official: false
+}
+
 export interface CaseState {
   case_id: string
   goal: string
@@ -81,6 +96,8 @@ export interface CaseState {
   conflicts: Conflict[]
   approval_stage: ApprovalStage
   decision_log: string[]
+  /** Never merged into evidence_log — rendered in a visually distinct card. */
+  supplementary_context?: SupplementaryItem[]
 }
 
 // ─── Artifacts (Documentation agent, §2.6) ────────────────────────────────────

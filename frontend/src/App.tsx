@@ -389,7 +389,10 @@ export default function App() {
         </div>
       </section>
 
-      <RegulationsFound requirements={caseState.requirements} />
+      <RegulationsFound
+        requirements={caseState.requirements}
+        supplementary={caseState.supplementary_context ?? []}
+      />
       <YourPath requirements={caseState.requirements} />
 
       <Footer />

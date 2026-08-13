@@ -94,6 +94,7 @@ class GraphState(TypedDict, total=False):
     approval_stage: Annotated[Any, take_last]
     artifacts: Annotated[Any, take_last]
     passage_texts: Annotated[dict, merge_dicts]
+    supplementary_context: Annotated[Any, take_last]
     submission: Annotated[Any, take_last]
 
 

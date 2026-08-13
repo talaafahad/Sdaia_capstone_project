@@ -86,6 +86,28 @@ class Conflict(BaseModel):
     resolution: Optional[ConflictResolution] = None
 
 
+class SupplementaryItem(BaseModel):
+    """A non-government, unverified reference from the open-web node.
+
+    Deliberately NOT an Evidence object and deliberately NOT stored in
+    ``evidence_log``. It cannot be cited, cannot satisfy a requirement, and
+    cannot move ``readiness_pct``. Confidence is fixed at LOW — the field is a
+    literal, so a MEDIUM or HIGH value fails validation rather than being
+    silently downgraded.
+    """
+
+    claim: str
+    #: Always shown in the UI — the whole point is that the user can see the
+    #: source is not a government domain.
+    source_url: str
+    source_domain: str
+    title: str = ""
+    retrieved_at: datetime
+    confidence: Literal["LOW"] = "LOW"
+    #: Always False. Present so any consumer must acknowledge the distinction.
+    is_official: Literal[False] = False
+
+
 class CaseState(BaseModel):
     case_id: str
     goal: str
@@ -116,6 +138,11 @@ class CaseState(BaseModel):
     #: Fields the Intake agent could not extract — listed, never guessed (§2.1).
     missing_fields: list[str] = Field(default_factory=list)
 
+    #: Open-web references from the additional_context node. Separate from
+    #: evidence_log by design: nothing here is citable, and nothing here may
+    #: affect readiness_pct or a requirement's status.
+    supplementary_context: list[SupplementaryItem] = Field(default_factory=list)
+
     @property
     def has_open_conflict(self) -> bool:
         """Readiness may not increase while this is true (§2.5 rule 4)."""
@@ -142,6 +169,9 @@ FRONTEND_MIRRORED_FIELDS: frozenset[str] = frozenset(
         "conflicts",
         "approval_stage",
         "decision_log",
+        # Additive: the frontend renders these in a visually distinct card. Old
+        # clients that do not know the field simply ignore it.
+        "supplementary_context",
     }
 )
 

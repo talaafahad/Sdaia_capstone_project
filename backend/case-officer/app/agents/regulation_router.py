@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from app.agents.additional_context import additional_context_node
 from app.agents.prompts import NODES, build_system_prompt, domains_for
 from app.config.allowlist import cap_confidence, entity_for, is_citable
 from app.config.category_map import FOOD_CATEGORIES
@@ -307,8 +308,21 @@ def regulation_router_node(state: dict, progress=None) -> dict:
             progress(node_id, "complete")
         return result
 
-    with ThreadPoolExecutor(max_workers=min(5, len(node_ids) or 1)) as pool:
+    def _run_supplementary() -> dict:
+        if progress:
+            progress("additional_context", "active")
+        update = additional_context_node(state)
+        if progress:
+            progress("additional_context", "complete")
+        return update
+
+    with ThreadPoolExecutor(max_workers=min(6, (len(node_ids) or 1) + 1)) as pool:
+        supplementary_future = pool.submit(_run_supplementary)
         results = list(pool.map(_run, node_ids))
+        supplementary_update = supplementary_future.result()
+
+    supplementary = supplementary_update.get("supplementary_context") or []
+    supplementary_decisions = supplementary_update.get("decision_log") or []
 
     requirements: list[dict] = []
     evidence: list[dict] = []
@@ -337,6 +351,8 @@ def regulation_router_node(state: dict, progress=None) -> dict:
     return {
         "requirements": requirements,
         "evidence_log": evidence,
-        "decision_log": decisions,
+        "decision_log": decisions + supplementary_decisions,
         "passage_texts": passage_texts,
+        # Separate key by design — never merged into evidence_log.
+        "supplementary_context": supplementary,
     }

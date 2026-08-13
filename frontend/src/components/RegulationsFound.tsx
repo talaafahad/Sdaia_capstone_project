@@ -1,10 +1,80 @@
-import { CheckCircle2, HelpCircle, Circle, ExternalLink } from 'lucide-react'
+import { CheckCircle2, HelpCircle, Circle, ExternalLink, Globe } from 'lucide-react'
 
-import type { RequirementItem } from '../types/caseState'
+import type { RequirementItem, SupplementaryItem } from '../types/caseState'
 import { groupByAgency, retrievalLabel, statusReason } from '../lib/agencies'
 
 interface RegulationsFoundProps {
   requirements: RequirementItem[]
+  /** Open-web references. Rendered in a deliberately muted card — never neon,
+   *  never with satisfied/verified language, never counted as an agency. */
+  supplementary?: SupplementaryItem[]
+}
+
+/** Grey, non-neon. Sits among the agency cards but must never be mistakable
+ *  for one at a glance — hence the neutral palette and the explicit header. */
+function NonGovernmentCard({ items }: { items: SupplementaryItem[] }) {
+  const MUTED = '#8A8A9A'
+  return (
+    <article
+      className="rounded-2xl overflow-hidden flex flex-col"
+      style={{
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px dashed rgba(255,255,255,0.14)',
+        // No glow. The agency cards get a neon boxShadow; this deliberately does not.
+      }}
+    >
+      <header className="px-5 pt-4 pb-3 flex items-center gap-2.5">
+        <span
+          className="shrink-0 inline-flex items-center justify-center rounded-lg"
+          style={{ width: 34, height: 34, color: MUTED, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)' }}
+        >
+          <Globe size={15} />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold" style={{ color: '#C9C9D4' }}>
+            Non-government sources
+          </h3>
+          <p className="text-[11px] leading-snug" style={{ color: '#7A7A8A' }}>
+            Not verified against an official government source — for reference only.
+          </p>
+        </div>
+      </header>
+
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+
+      <ul className="flex-1 flex flex-col">
+        {items.map((item, i) => (
+          <li
+            key={`${item.source_url}-${i}`}
+            className="px-5 py-3"
+            style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.05)' }}
+          >
+            <div className="flex items-start justify-between gap-2.5 mb-1">
+              <span className="text-[13px] leading-snug" style={{ color: '#C9C9D4' }}>
+                {item.claim}
+              </span>
+              <span
+                className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                style={{ color: MUTED, background: 'rgba(255,255,255,0.04)', border: `1px solid ${MUTED}44` }}
+              >
+                Low
+              </span>
+            </div>
+            <a
+              href={item.source_url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1 text-[10px] hover:underline break-all"
+              style={{ color: MUTED }}
+            >
+              <ExternalLink size={9} />
+              {item.source_domain || item.source_url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </article>
+  )
 }
 
 /** Status chip. "Unverified" is deliberately amber and NOT red — it is an
@@ -28,8 +98,8 @@ function StatusChip({ status }: { status: RequirementItem['status'] }) {
   )
 }
 
-export default function RegulationsFound({ requirements }: RegulationsFoundProps) {
-  if (requirements.length === 0) return null
+export default function RegulationsFound({ requirements, supplementary = [] }: RegulationsFoundProps) {
+  if (requirements.length === 0 && supplementary.length === 0) return null
 
   const groups = groupByAgency(requirements)
   const cited = requirements.filter(r => r.evidence?.source_url).length
@@ -171,6 +241,10 @@ export default function RegulationsFound({ requirements }: RegulationsFoundProps
               </ul>
             </article>
           ))}
+
+          {/* Open-web references. Inside the same section so the contrast with
+              the agency cards is immediate, but never styled as one. */}
+          {supplementary.length > 0 && <NonGovernmentCard items={supplementary} />}
         </div>
       </div>
     </section>
