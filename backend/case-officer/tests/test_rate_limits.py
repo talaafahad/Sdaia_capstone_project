@@ -143,6 +143,57 @@ class TestBackoffBehaviour:
             call_json("verifier", "sys", "user")
         assert llm_cache.stats()["entries"] == 0
 
+    def test_timeout_is_never_cached(self, monkeypatch):
+        class TimingOutLLM:
+            def invoke(self, _m):
+                raise TimeoutError("read timed out")
+
+        monkeypatch.setattr(llm_module, "get_llm", lambda *a, **k: TimingOutLLM())
+        with pytest.raises(ModelUnavailable):
+            call_json("verifier", "sys", "user")
+        assert llm_cache.stats()["entries"] == 0
+
+    def test_malformed_json_is_never_cached(self, monkeypatch):
+        """extract_json raises before the write, so a garbage reply is not stored."""
+        class GarbageLLM:
+            def invoke(self, _m):
+                return type("R", (), {"content": "I cannot help with that."})()
+
+        monkeypatch.setattr(llm_module, "get_llm", lambda *a, **k: GarbageLLM())
+        with pytest.raises(ModelUnavailable):
+            call_json("verifier", "sys", "user", attempts=1)
+        assert llm_cache.stats()["entries"] == 0
+
+    def test_rate_limit_then_success_caches_only_the_success(self, monkeypatch):
+        """The scenario that matters for a regression run after a throttled
+        session: a 429 must not leave anything behind, and the eventual real
+        answer must be what gets replayed."""
+        calls = {"n": 0}
+
+        class FlakyLLM:
+            def invoke(self, _m):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise FakeRateLimitError()
+                return type("R", (), {"content": '{"verdicts": [{"index": 0, "accepted": true}]}'})()
+
+        monkeypatch.setattr(llm_module, "get_llm", lambda *a, **k: FlakyLLM())
+        result = call_json("verifier", "sys", "user")
+
+        assert result == {"verdicts": [{"index": 0, "accepted": True}]}
+        assert llm_cache.stats()["entries"] == 1
+        # And what comes back out is the real answer, not the failure.
+        replayed = llm_cache.read("verifier", llm_module.model_for("verifier"), "sys", "user")
+        assert replayed == result
+
+    def test_a_replayed_entry_is_byte_identical(self, monkeypatch, tmp_path):
+        """No mutation on the round trip — the regression run replays exactly
+        what the successful call produced."""
+        monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path / "roundtrip"))
+        payload = {"requirements": [{"name": "VAT", "note": "SAR 375,000 — الضريبة"}]}
+        llm_cache.write("vat_registration", "m", "sys", "user", payload)
+        assert llm_cache.read("vat_registration", "m", "sys", "user") == payload
+
 
 class TestVerifierDistinguishesFailureFromFinding:
     """The headline guarantee: a 429 must not read as 'nothing was sourced'."""
