@@ -215,7 +215,10 @@ export function toAuditEntries(trace: { text: string; at: string }[]): AuditEntr
     const [head, ...rest] = item.text.split(/(?<=:)\s/)
     return {
       id: `${i}`,
-      timestamp: formatClock(item.at),
+      // Raw ISO, NOT a pre-formatted clock. AuditLog calls new Date() on this;
+      // passing an already-formatted "10:57:45" produced Invalid Date on every
+      // entry. The backend stamps `at` on every event, so this is always valid.
+      timestamp: item.at,
       message: rest.length ? head.trim() : item.text.slice(0, 90),
       detail: rest.length ? rest.join(' ').trim() : item.text,
       severity: severityOf(item.text),

@@ -24,8 +24,14 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
   const cfg = SEV_CONFIG[entry.severity]
   const Icon = cfg.icon
 
-  // Format ISO → HH:MM:SS
-  const time = new Date(entry.timestamp).toLocaleTimeString('en-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  // Format ISO → HH:MM:SS. Guarded so a malformed value degrades to a dash
+  // rather than printing "Invalid Date" in the middle of the audit trail.
+  const parsed = new Date(entry.timestamp)
+  const time = Number.isNaN(parsed.getTime())
+    ? '--:--:--'
+    : parsed.toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      })
 
   return (
     <div
@@ -74,8 +80,11 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
 
       {/* Raw detail */}
       {showDetail && entry.detail && (
+        // whitespace-pre-wrap + break-words: <pre> does not wrap, so a long
+        // decision entry ran off the side behind a horizontal scrollbar and was
+        // unreadable. pt-2.5 stops the text sitting flush against the border.
         <pre
-          className="text-[11px] leading-relaxed px-3 pb-3 pt-0 overflow-x-auto"
+          className="text-[11px] leading-relaxed px-3 pb-3 pt-2.5 whitespace-pre-wrap break-words"
           style={{ color: '#93DEAE', fontFamily: 'monospace', borderTop: `1px solid ${cfg.border}` }}
         >
           {entry.detail}
@@ -138,8 +147,11 @@ export default function AuditLog({ agentName, entries, defaultCollapsed = false 
 
       {/* Entries */}
       {!collapsed && (
+        // max-h-72 (288px) clipped rows mid-height at both ends, which reads as
+        // entries fading out. Taller viewport, generous row gap, and
+        // overscroll-contain so the page does not scroll once the list ends.
         <div
-          className="px-3 pb-3 flex flex-col gap-1.5 max-h-72 overflow-y-auto"
+          className="px-3 pb-3 flex flex-col gap-2 max-h-[34rem] overflow-y-auto overscroll-contain"
           style={{ borderTop: '1px solid rgba(129,116,201,0.1)' }}
         >
           <div className="pt-3" />

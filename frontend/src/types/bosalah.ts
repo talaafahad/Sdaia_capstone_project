@@ -53,6 +53,7 @@ export type AuditSeverity = 'info' | 'success' | 'warning' | 'error'
 
 export interface AuditEntry {
   id: string
+  /** ISO-8601 string. AuditLog formats it — do NOT pass a pre-formatted time. */
   timestamp: string
   message: string
   detail?: string
