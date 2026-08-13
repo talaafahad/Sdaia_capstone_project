@@ -1,4 +1,5 @@
-# GovFlow KSA — Claude Code Handoff (Final)
+# Bosalah — بوصلة
+
 ### Build order: Frontend → Backend → Integration
 ### Companion to GovFlow-KSA-Implementation-Plan.md (agent specs, prompts, allowlist, field spec, theme all live there — this file sequences the actual build)
 
