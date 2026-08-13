@@ -4,7 +4,7 @@ title: Issuing a Fast-Track Commercial License
 source_url: https://balady.gov.sa/en/services/issuing-fast-track-commercial-license
 source_entity: Balady
 domain: balady.gov.sa
-retrieved_at: '2026-08-12T12:29:45+00:00'
+retrieved_at: '2026-08-12T13:28:59+00:00'
 http_status: 200
 categories:
 - food_beverage_fixed

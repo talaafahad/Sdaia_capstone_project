@@ -4,7 +4,7 @@ title: Mobile Cart License Issuance
 source_url: https://balady.gov.sa/en/services/mobile-cart-license-issuance
 source_entity: Balady
 domain: balady.gov.sa
-retrieved_at: '2026-08-12T12:29:46+00:00'
+retrieved_at: '2026-08-12T13:29:01+00:00'
 http_status: 200
 categories:
 - food_truck_mobile

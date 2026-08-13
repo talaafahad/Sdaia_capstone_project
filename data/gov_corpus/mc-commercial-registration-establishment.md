@@ -4,7 +4,7 @@ title: A commercial registration for an establishment
 source_url: https://mc.gov.sa/en/eservices/Pages/ServiceDetails.aspx?sID=38
 source_entity: Ministry of Commerce
 domain: mc.gov.sa
-retrieved_at: '2026-08-12T12:30:09+00:00'
+retrieved_at: '2026-08-12T13:29:21+00:00'
 http_status: 200
 categories: []
 topics:

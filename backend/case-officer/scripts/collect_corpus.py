@@ -129,6 +129,17 @@ TARGETS: list[Target] = [
         ["food_beverage_fixed"],
         ["municipal_license"],
     ),
+    # Food-SERVICE requirements live on Balady, not the SFDA: restaurant/cafe
+    # premises are municipally licensed, while the SFDA's remit is manufacture,
+    # import and product registration. This page is the food vertical's real
+    # requirements source.
+    Target(
+        "balady-restaurant-requirements",
+        "https://balady.gov.sa/ar/consultations/%D8%A7%D8%B4%D8%AA%D8%B1%D8%A7%D8%B7%D8%A7%D8%AA-%D8%A7%D9%84%D9%85%D8%B7%D8%A7%D8%B9%D9%85",
+        "اشتراطات المطاعم — Restaurant Requirements",
+        ["food_beverage_fixed", "food_truck_mobile"],
+        ["municipal_requirements", "food_safety"],
+    ),
     # --- Balady: the mobile-cart sub-service — the second vertical (section 10) ---
     Target(
         "balady-mobile-cart-license-issuance",
@@ -206,11 +217,15 @@ TARGETS: list[Target] = [
         [],
         ["commercial_registration"],
     ),
-    # --- SFDA: food safety ---
+    # --- SFDA: food safety.
+    # The English e-service detail pages are client-rendered and yield nothing.
+    # This Arabic FAQ is server-rendered and, more usefully, defines the SCOPE of
+    # the SFDA's local-food-establishment licensing system — which is what stops
+    # the food_safety node applying a manufacturing rule to a cafe. ---
     Target(
-        "sfda-food-manufacture-licensing",
-        "https://www.sfda.gov.sa/en/eservices/88813",
-        "Food Manufacture Licensing Service",
+        "sfda-local-food-establishment-scope",
+        "https://www.sfda.gov.sa/ar/faq/85156",
+        "ماذا نقصد بنظام تسجيل وترخيص المنشآت الغذائية المحلية؟",
         ["food_beverage_fixed", "food_truck_mobile"],
         ["food_safety"],
     ),

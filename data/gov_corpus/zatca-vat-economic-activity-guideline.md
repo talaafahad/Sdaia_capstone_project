@@ -4,7 +4,7 @@ title: VAT Guideline — Economic Activity
 source_url: https://zatca.gov.sa/en/HelpCenter/guidelines/Documents/Economic%20Activity.pdf
 source_entity: ZATCA
 domain: zatca.gov.sa
-retrieved_at: '2026-08-12T12:29:55+00:00'
+retrieved_at: '2026-08-12T13:29:10+00:00'
 http_status: 200
 categories: []
 topics:

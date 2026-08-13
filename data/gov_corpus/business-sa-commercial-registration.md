@@ -4,7 +4,7 @@ title: Commercial Registration
 source_url: https://business.sa/en/servicesprocedures/details/3f37df76-a853-4616-ef34-08dced12ee80
 source_entity: Saudi Business Center
 domain: business.sa
-retrieved_at: '2026-08-12T12:29:59+00:00'
+retrieved_at: '2026-08-12T13:29:14+00:00'
 http_status: 200
 categories: []
 topics:

@@ -4,7 +4,7 @@ title: Registration — General Organization for Social Insurance
 source_url: https://www.gosi.gov.sa/GOSIOnline/Registration&locale=en_US
 source_entity: GOSI
 domain: gosi.gov.sa
-retrieved_at: '2026-08-12T12:31:52+00:00'
+retrieved_at: '2026-08-12T13:29:26+00:00'
 http_status: 200
 categories: []
 topics:

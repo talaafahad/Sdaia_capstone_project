@@ -4,7 +4,7 @@ title: Commercial Licenses (product overview)
 source_url: https://balady.gov.sa/en/products/commercial-licenses
 source_entity: Balady
 domain: balady.gov.sa
-retrieved_at: '2026-08-12T12:29:49+00:00'
+retrieved_at: '2026-08-12T13:29:05+00:00'
 http_status: 200
 categories:
 - food_beverage_fixed
@@ -241,12 +241,12 @@ Comment
 
 For more information, you can refer to electronic participation section. and Privacy and Terms of Use
 
-**72.6%** of users said yes out of **339,591** responses
+**72.6%** of users said yes out of **339,600** responses
 
 |  |
 | --- |
-| 246, 417 |
+| 246, 421 |
 
 |  |
 | --- |
-| 339, 591 |
+| 339, 600 |

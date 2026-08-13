@@ -4,7 +4,7 @@ title: FAQ — mandatory VAT registration threshold
 source_url: https://zatca.gov.sa/en/HelpCenter/FAQs/Pages/FAQ_026.aspx
 source_entity: ZATCA
 domain: zatca.gov.sa
-retrieved_at: '2026-08-12T12:29:58+00:00'
+retrieved_at: '2026-08-12T13:29:13+00:00'
 http_status: 200
 categories: []
 topics:

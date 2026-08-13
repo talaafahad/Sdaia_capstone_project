@@ -29,7 +29,12 @@ dist-ssr/
 .vscode/*
 !.vscode/extensions.json
 
+# --- Retrieval caches (regenerable; keep out of the repo) ---
+data/.tavily_cache/
+data/.embed_cache/
+
 # --- Logs ---
 *.log
 npm-debug.log*
 yarn-error.log*
+data/.llm_cache/

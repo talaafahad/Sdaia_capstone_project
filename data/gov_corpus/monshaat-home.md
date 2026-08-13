@@ -4,7 +4,7 @@ title: Monsha'at — SME authority
 source_url: https://monshaat.gov.sa/en
 source_entity: Monsha'at
 domain: monshaat.gov.sa
-retrieved_at: '2026-08-12T12:31:56+00:00'
+retrieved_at: '2026-08-12T13:29:31+00:00'
 http_status: 200
 categories: []
 topics:

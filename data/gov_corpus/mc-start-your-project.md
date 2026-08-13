@@ -4,7 +4,7 @@ title: Start your business
 source_url: https://mc.gov.sa/en/Pages/Start-your-project.aspx
 source_entity: Ministry of Commerce
 domain: mc.gov.sa
-retrieved_at: '2026-08-12T12:30:04+00:00'
+retrieved_at: '2026-08-12T13:29:20+00:00'
 http_status: 200
 categories: []
 topics:

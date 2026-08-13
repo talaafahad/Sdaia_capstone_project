@@ -4,7 +4,7 @@ title: VAT Registration
 source_url: https://zatca.gov.sa/en/eServices/Pages/eServices_002.aspx
 source_entity: ZATCA
 domain: zatca.gov.sa
-retrieved_at: '2026-08-12T12:29:57+00:00'
+retrieved_at: '2026-08-12T13:29:12+00:00'
 http_status: 200
 categories: []
 topics:

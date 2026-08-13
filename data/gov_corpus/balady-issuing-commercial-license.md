@@ -4,7 +4,7 @@ title: Issuing a Commercial License
 source_url: https://balady.gov.sa/en/services/issuing-commercial-license
 source_entity: Balady
 domain: balady.gov.sa
-retrieved_at: '2026-08-12T12:29:42+00:00'
+retrieved_at: '2026-08-12T13:28:55+00:00'
 http_status: 200
 categories:
 - food_beverage_fixed
