@@ -32,10 +32,10 @@ all.
 - [How to run](#how-to-run)
 - [Usage](#usage)
 - [Example output](#example-output)
+- [Demo](#demo)
 - [Verifying the backend is connected to the frontend](#verifying-the-backend-is-connected-to-the-frontend)
 - [Testing](#testing)
 - [Known limitations](#known-limitations)
-- [Demo](#demo)
 - [Future work](#future-work)
 - [Team](#team)
 - [Course information](#course-information)
@@ -965,7 +965,7 @@ collapsed into one generic "incomplete."
 
 ![Your Path](assets/your-path.png)
 
-### Demo
+## Demo
 
 Presentation deck: `docs/Bosalah_Capstone.pptx`
 
@@ -1131,14 +1131,6 @@ thing this project is arguing against.
 
 ---
 
-## Demo
-
-Presentation deck: `docs/Bosalah_Capstone.pptx`
-
-<!-- If you record a walkthrough video, add the link here:
-Demo: https://youtube.com/... -->
-
----
 
 ## Future work
 
