@@ -185,6 +185,22 @@ decision log says so in unmistakable terms:
 numbers and mean opposite things. Conflating them is the worst failure this
 system could have, so it is called out explicitly.
 
+**Two different failures were once conflated, too.** The free OpenRouter tier
+turned out to cap at 50 requests **per day**, not per minute. Early code
+treated a daily cap the same as a per-minute throttle — every node slept 90
+seconds and retried against the same exhausted, account-wide allowance, so a
+run took ten minutes to fail instead of failing fast. A daily-cap rejection now
+fails immediately with the reset time and the remedy; a genuine per-minute
+throttle still backs off and retries as before.
+
+**The response cache is verified to never replay a failure as a success.** The
+cache write sits strictly between a successful parse and the return — any
+exception skips it, and there is no other call site that writes to it. Tests
+pin this directly: a 429, a timeout, and malformed JSON each write nothing to
+the cache; a 429 followed later by a success stores only the success. Every
+live cache entry was audited by hand at least once to confirm none contain an
+error payload.
+
 ---
 
 ## System architecture
@@ -229,8 +245,9 @@ flowchart TD
     FE -- SSE + REST --> CO[Case Officer :8000 — LangGraph]
 
     CO --> IP[Intake & Planner]
-    IP --> RR[Regulation & Service Router — 5 sub-nodes]
+    IP --> RR[Regulation & Service Router — 6 sub-nodes]
 
+    RR --> AC[additional_context — open web, quarantined]
     RR --> ML[Municipal & Location]
     RR --> TF[Tax / Financial — plain Python, no LLM]
 
@@ -372,18 +389,18 @@ that it **must not guess**: an unstated city is listed in `missing_fields`, neve
 inferred. It is also forbidden from answering any regulatory question — that is
 another agent's job, with evidence.
 
-### 2. Regulation & Service Router *(five topic sub-nodes)*
+### 2. Regulation & Service Router *(six topic sub-nodes)*
 
 | | |
 |---|---|
 | **Role** | Determine what each agency requires, grounded only in retrieved allowlisted pages |
 | **Tools** | `search_gov_sources` (Tavily, `include_domains` locked), local corpus hybrid search |
-| **Model** | `nvidia/nemotron-3-ultra-550b-a55b:free` on every sub-node |
+| **Model** | `nvidia/nemotron-3-ultra-550b-a55b:free` on the five government-scoped sub-nodes |
 | **Output** | `RequirementItem[]` + `Evidence[]` |
 
-Every sub-node gets the strongest available model because citation discipline is
-where a weaker model fails first — by paraphrasing just past what the source
-actually said.
+Every government-scoped sub-node gets the strongest available model because
+citation discipline is where a weaker model fails first — by paraphrasing just
+past what the source actually said.
 
 Domain scope per sub-node:
 
@@ -398,6 +415,40 @@ Domain scope per sub-node:
 **The Router deliberately does not own `balady.gov.sa`.** Municipal requirements
 belong to the A2A service; leaving Balady here would have two components
 retrieving the same pages and double-reporting the licence.
+
+**A sixth sub-node, `additional_context`, is architecturally different from the
+other five.** It is the only retrieval node with **no government domain
+allowlist** — it searches the open web so non-government sources (consultancy
+guides, law-firm articles) can surface useful context an official page might
+not phrase plainly. Because that context can be genuinely useful but is
+categorically less trustworthy, its isolation from the verified pipeline is
+enforced in code, not by convention:
+
+- Its output lives in a separate field, `supplementary_context`, with **no code
+  path** that can write to `requirements` or `evidence_log`.
+- Its data type pins `confidence` to the literal `"LOW"` and `is_official` to
+  `False` at the schema level — assigning anything else fails Pydantic
+  validation at construction, so a wrong value cannot silently slip through.
+- It can never move `readiness_pct`. A test stuffs a case with ten
+  supplementary items and asserts readiness is unaffected.
+
+Because there is no domain allowlist to lean on, scoping this node to Saudi
+Arabia specifically required three independent layers rather than one:
+
+1. The search query itself contains "Saudi Arabia", biasing the search engine
+   before any model is involved.
+2. A code-level keyword check drops any result with no mention of Saudi
+   Arabia, KSA, the Kingdom, or a Saudi regulator — applied **twice**: once to
+   raw search results, and again to the claim the model writes, since a model
+   can summarise a Saudi page into a country-neutral sentence that would
+   otherwise slip past the first check. (`"Kingdom"` deliberately does not
+   match inside `"United Kingdom"` — a naive substring check would pass every
+   UK government page on that word alone.)
+3. The system prompt instructs the model to ignore other jurisdictions, as a
+   final layer rather than the only one.
+
+Tests prove the isolation with real non-Saudi pages (UAE, Egypt, UK) filtered
+entirely in code, model switched off.
 
 ### 3. Municipal & Location *(separate A2A service, port 8001)*
 
@@ -425,6 +476,35 @@ nearby competitors — a wrong location producing a confident number is worse th
 an obvious failure. Candidates outside the box are now discarded, district
 polygons are preferred over streets that share the name, and a weak match is
 labelled so the count can be discounted.
+
+**This node returned nothing for a while, and it turned out to be three
+compounding bugs, not one:**
+
+1. **The question was over-specific.** It asked what applies to *this*
+   category, in *this* district, at *this* exact square-metre figure — the
+   most granular binding of any node. Balady publishes requirements for
+   commercial premises generally and never names a district or a sqm number,
+   so a source failing to match all three read as a miss. The prompt now asks
+   what Balady publishes for commercial premises and which of it governs the
+   activity; case facts remain available for stating conditions in the note,
+   never as a filter on what gets reported.
+2. **The retrieved context was 183,000 characters.** Live Balady/momah pages
+   are service directories — two measured over 52,000 characters each, mostly
+   a catalogue of unrelated services (maps, panoramas, vehicle marking). The
+   whole page was being sent whole, so the licence requirements were buried.
+   Now windowed around the query: 183,299 → 9,579 characters, a 19× reduction
+   — the same class of bug as the Verifier's passage-windowing fix, in the
+   opposite direction (too much irrelevant content diluting the signal, rather
+   than too little of the right content reaching it).
+3. **This was the only model-calling node with no rate-limit handling at
+   all.** A 429 surfaced identically to "Balady genuinely publishes nothing" —
+   indistinguishable in the output. It now shares the same backoff schedule as
+   the Case Officer.
+
+Any one of these alone could produce a false "unverified" result; together
+they meant the node's output could not be trusted until all three were found
+and fixed. Real Balady requirements (establishment record, exterior signboard
+photo, lease/ownership contract) now surface correctly.
 
 ### 4. Tax / Financial — **no model in the decision path**
 
@@ -612,6 +692,43 @@ which model each node runs on; that mapping lives at `GET /api/models`.
 Because a first run genuinely takes minutes, the UI shows an elapsed timer and
 sets expectations rather than implying a snappy response.
 
+**Results are presented in three sections**, replacing an earlier "Journey
+Roadmap" and a generic filterable evidence panel that had no real relationship
+to case state:
+
+- **"Regulations found"** — one card per agency (Ministry of Commerce,
+  Municipalities & Housing, SFDA, ZATCA, GOSI…), grouped by the entity the
+  *allowlist* assigns, never by anything a model produced. Each row shows the
+  requirement, a `VERIFIED` / `REQUIRED` / `UNVERIFIED` chip, the reason, a
+  retrieval-path badge (`Live` or `Corpus`), and a source link.
+- **"Non-government sources"** — sits inside the same section as the agency
+  cards but is deliberately muted grey with a dashed border and no glow, so it
+  can never be mistaken for one at a glance. Carries the `additional_context`
+  node's output: real source domain, a `LOW` badge, and the subtitle *"Not
+  verified against an official government source — for reference only."* No
+  verified/satisfied language appears anywhere in it.
+- **"Your Path"** — two columns, Completed and Missing, computed from
+  `requirement.status` rather than from citation presence alone: a requirement
+  only reads Completed once there is both an accepted citation *and* the
+  case's own data actually satisfies it (e.g. stated applicant age against a
+  stated minimum), not merely because nothing contradicts it. `unverified`
+  requirements appear in Missing, in amber, explicitly distinct from a red
+  action state — "we could not verify this" is an honest system state, not a
+  failure.
+
+Four bugs found during frontend testing, worth knowing if they resurface:
+the Audit Log's "Invalid Date" traced to the frontend double-formatting an
+already-formatted timestamp before passing it to a date parser, not a backend
+timestamp gap; the Audit Log's apparent fade at the top and bottom of the list
+was a clipped fixed-height container, not a mask, now scrollable; the
+submission-confirmation modal once rendered a string character-by-character as
+a numbered list because it was passed a plain string instead of the key/value
+object it expects (now type-enforced at compile time); and a blank,
+unrecoverable screen after confirming submission meant React had unmounted the
+entire app — two error boundaries now contain that failure, one around the
+submission modal with its close controls rendered *outside* the boundary so a
+display fault can never trap the user again, and one at the app root.
+
 ---
 
 ## Repository layout
@@ -630,8 +747,8 @@ Sdaia_capstone_project/
 │   │   │   ├── mcp/                  agent cards, auth-gated execution adapter
 │   │   │   └── config/               allowlist, category map, settings
 │   │   ├── scripts/collect_corpus.py Phase 0 corpus collector
-│   │   └── tests/                    302 tests
-│   └── municipal-location/           A2A microservice (:8001), 36 tests
+│   │   └── tests/                    343 tests
+│   └── municipal-location/           A2A microservice (:8001), 48 tests
 ├── frontend/                         React + Vite (:5173)
 │   └── src/
 │       ├── api/caseStream.ts         the only file that touches the network
@@ -761,14 +878,13 @@ cd frontend && npm run dev
 
 Open **http://localhost:5173**.
 
-### For the maintainer — already configured
-
-```bash
-cd /Users/talaalothaim/Desktop/Sdaia_capstone_project
-(cd backend/municipal-location && uv run uvicorn app.main:app --port 8001 &)
-(cd backend/case-officer       && uv run uvicorn app.main:app --port 8000 &)
-(cd frontend                   && npm run dev)
-```
+> All three services can also be started in the background from the repository
+> root once dependencies are installed:
+> ```bash
+> (cd backend/municipal-location && uv run uvicorn app.main:app --port 8001 &)
+> (cd backend/case-officer       && uv run uvicorn app.main:app --port 8000 &)
+> (cd frontend                   && npm run dev)
+> ```
 
 ### Expect a long first run
 
@@ -785,8 +901,14 @@ cleanly, then record the replay. Check `GET /health` → `llm_cache.entries` to
 confirm the cache is primed. Failed calls are not cached, so if a warm-up gets
 rate-limited part-way, run it again before recording.
 
-Adding a small amount of credit to the OpenRouter account raises the daily cap
-substantially and is the single easiest way to avoid a 429 mid-demo.
+**The free OpenRouter tier caps at 50 model requests per day** (not per
+minute), resetting at 00:00 UTC — roughly seven full cases. The backend
+distinguishes the two failure modes rather than treating them the same: a
+per-minute throttle backs off and retries (5s → 20s → 65s); a daily-cap
+rejection fails **immediately** with a message naming the reset time, instead
+of the old behaviour of sleeping 90 seconds per node and burning ten minutes to
+fail anyway. Adding a small amount of credit (~$10) raises the daily cap to
+roughly 1,000/day and is the single easiest way to avoid running out mid-demo.
 
 ### Useful environment switches
 
@@ -948,13 +1070,13 @@ curl -s localhost:8000/api/debug/retrieve -H 'Content-Type: application/json' \
 ## Testing
 
 ```bash
-(cd backend/case-officer       && uv run pytest -q)   # 302 tests
-(cd backend/municipal-location && uv run pytest -q)   # 31 tests
+(cd backend/case-officer       && uv run pytest -q)   # 343 tests
+(cd backend/municipal-location && uv run pytest -q)   # 48 tests
 (cd backend/municipal-location && uv run pytest -m live -q)  # 5 live geocoding
 (cd frontend && npm run build)
 ```
 
-**338 tests.** The suite runs **offline by default** — live search and embeddings
+**391 backend tests.** The suite runs **offline by default** — live search and embeddings
 are disabled in `conftest.py` so results are deterministic whether or not real
 keys are present.
 
@@ -968,7 +1090,17 @@ the system, not by reasoning about it:
 - A rate-limited audit reads as a system failure, never as a finding.
 - `evilbalady.gov.sa`, `balady.gov.sa.attacker.com` and
   `https://balady.gov.sa@evil.com/` are all rejected by the allowlist.
-- Passage windowing finds phrases buried deep in real 162k-character documents.
+- Passage windowing finds phrases buried deep in real 162k-character documents,
+  and separately, in real 183k-character Balady/momah service-directory pages.
+- `additional_context` items can never appear in accepted evidence or move
+  `readiness_pct`, even when a case is stuffed with ten of them.
+- Real non-Saudi pages (UAE, Egypt, UK) are filtered out of
+  `additional_context` results by the code-level check alone, model switched
+  off — including the `"Kingdom"` / `"United Kingdom"` false-positive case.
+- The response cache never stores a 429, a timeout, or malformed JSON as if it
+  were a successful answer.
+- A daily rate-limit rejection and a per-minute throttle are distinguished and
+  handled differently — the former fails immediately, the latter backs off.
 
 ---
 
@@ -985,19 +1117,30 @@ thing this project is arguing against.
 3. **SFDA has no corpus document.** Its e-service pages are client-rendered and
    yield no text. Food safety is live-search-only; if Tavily is unavailable that
    requirement correctly reports `unverified`.
-4. **Free-tier latency is the dominant constraint** — ~60–70s per model call.
-5. **No minor-applicant pathway.** If an applicant states an age under 18 the
+4. **Free-tier quota is the dominant practical constraint** — 50 model requests
+   per day, resetting 00:00 UTC, roughly seven full cases. A cold case takes up
+   to ~7 minutes; a repeat of the same case ~90 seconds from cache.
+5. **The lease-discrepancy resolution is not yet recorded as its own citable
+   evidence item** tagged `document`, so the Document category in "Regulations
+   found" currently stays empty even after a conflict is resolved.
+6. **For the food & beverage vertical, only 5 of the 6 Regulation Router nodes
+   run** — `intellectual_property` is scoped to professional-office cases by
+   design, not a gap.
+7. **No minor-applicant pathway.** If an applicant states an age under 18 the
    system declines to proceed and points at an official source rather than
    inventing a process.
-6. **Geocoding is approximate.** OSM often has only streets, not district
+8. **Geocoding is approximate.** OSM often has only streets, not district
    polygons, for Riyadh districts; weak matches are labelled so the competitor
    count can be discounted.
-7. **The execution adapter is a mock.** Nothing is ever filed with any agency.
-8. **`MemorySaver` checkpointing** — a case does not survive a backend restart.
-9. **The frontend renders four of the six artifacts.** Journey, evidence report,
-   audit log and packet gate are wired; the checklist and fee estimate are
-   fetched and held in state but have no component yet.
-10. **Not legal advice.** Every output is a research aid pointing at official
+9. **The execution adapter is a mock.** Nothing is ever filed with any agency.
+10. **`MemorySaver` checkpointing** — a case does not survive a backend restart.
+11. **The frontend renders four of the six artifacts.** Journey, evidence report,
+    audit log and packet gate are wired; the checklist and fee estimate are
+    fetched and held in state but have no component yet.
+12. **The submission auth token currently sits in the frontend `.env`** as a
+    demo shortcut (`VITE_MCP_AUTH_TOKEN`) — a real deployment would gate
+    submission server-side, never in a browser bundle.
+13. **Not legal advice.** Every output is a research aid pointing at official
     sources, and says so.
 
 ---
@@ -1045,8 +1188,3 @@ Built as the capstone project for **Advanced Agentic AI Systems Engineering**
 SDAIA Academy: https://github.com/SDAIAAcademy
 
 ---
-
-## Reference documents
-
-- [`docs/GovFlow-KSA-Implementation-Plan (1).md`](<docs/GovFlow-KSA-Implementation-Plan (1).md>) — agent specs, system prompts, domain allowlist, field spec, theme
-- [`docs/GovFlow-KSA-Claude-Code-Handoff.md`](docs/GovFlow-KSA-Claude-Code-Handoff.md) — model picks, API keys, build order
