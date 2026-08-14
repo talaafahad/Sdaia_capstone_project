@@ -928,24 +928,48 @@ curl -N localhost:8000/api/cases/<case_id>/stream
 
 ## Example output
 
-<!-- Add 3–4 screenshots here: the intake form, the live Agent Activity roster
-     mid-run, the conflict-resolution modal (lease vs. stated area), and the
-     final artifact view (Journey / Evidence Report). Save images under
-     assets/ and reference them below. -->
+Four stages of a single run, from architecture explainer through to a scored,
+cited result.
 
-### Live agent roster
+### How it works
 
-![Agent roster](assets/agent-roster.png)
+The six-agent flow as shown to a first-time visitor before they start a case —
+goal understood, official sources checked, municipal requirements verified,
+every claim audited, the packet assembled, next step surfaced.
 
-### Conflict resolution gate
+![How it works](assets/how-it-works.png)
 
-![Conflict gate](assets/conflict-gate.png)
+### Live agent activity
 
-### Evidence report
+The roster mid-run: each node's real status, message, and badge (`LLM` / `A2A`
+/ `DET`), plus the audit log beneath it and the mock-submission notice —
+`MOCK-BLD-…`, explicitly labelled as conferring no real status or approval.
 
-Each accepted requirement lists its source entity, URL, and retrieval
-timestamp; rejected claims are shown too, with their rejection reason — the
-Verifier's work is only legible if you can see what it threw away.
+![Agent activity](assets/agent-activity.png)
+
+### Regulations found
+
+Requirements grouped by the agency that owns them, each carrying a
+`VERIFIED` / `REQUIRED` / `UNVERIFIED` chip, a retrieval-path badge, and a
+source link — including a case where the Verifier rejected a citation
+(`VAT registration (ZATCA)`) and that rejection is shown, not hidden.
+
+![Regulations found](assets/regulations-found.png)
+
+### Your Path
+
+The same case's final scored status: which requirements are confirmed against
+a cited source, which could not be verified, and why — a rejected citation and
+an absent source produce different, legible outcomes rather than being
+collapsed into one generic "incomplete."
+
+![Your Path](assets/your-path.png)
+
+### Demo
+
+Presentation deck: `docs/Bosalah_Capstone.pptx`
+
+Video walkthrough: [Watch on Google Drive](<https://drive.google.com/file/d/1N2v8HeiUCC1PnliziN4Z8smzUJqelFQj/view?usp=sharing>)
 
 ---
 
