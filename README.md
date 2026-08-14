@@ -16,19 +16,29 @@ all.
 
 - [The problem](#the-problem)
 - [The solution](#the-solution)
+- [Solution or agent design](#solution-or-agent-design)
 - [Why this is hard: the hallucination problem](#why-this-is-hard-the-hallucination-problem)
 - [System architecture](#system-architecture)
+- [Architecture diagram](#architecture-diagram)
 - [The agent hierarchy](#the-agent-hierarchy)
+- [How the agent works](#how-the-agent-works)
 - [Agent reference](#agent-reference)
 - [Model assignment per node](#model-assignment-per-node)
 - [The retrieval architecture](#the-retrieval-architecture)
 - [Human-in-the-loop gates](#human-in-the-loop-gates)
 - [The frontend](#the-frontend)
 - [Repository layout](#repository-layout)
+- [Agent stack](#agent-stack)
 - [How to run](#how-to-run)
+- [Usage](#usage)
+- [Example output](#example-output)
 - [Verifying the backend is connected to the frontend](#verifying-the-backend-is-connected-to-the-frontend)
 - [Testing](#testing)
 - [Known limitations](#known-limitations)
+- [Demo](#demo)
+- [Future work](#future-work)
+- [Team](#team)
+- [Course information](#course-information)
 
 ---
 
@@ -92,6 +102,38 @@ because the "no sources" branch never reaches a model at all.
 
 ---
 
+## Solution or agent design
+
+What the system receives, what the agent does, and what it produces:
+
+```text
+User submits a one-sentence goal + structured intake fields
+                    ↓
+        Intake & Planner extracts structured case data
+                    ↓
+   Regulation Router retrieves requirements from allowlisted
+              government sources only
+                    ↓
+   Municipal & Location (A2A) and Tax / Financial (deterministic
+              Python) run in parallel
+                    ↓
+   Verifier audits every claim; unresolved conflicts trigger a
+              human-in-the-loop decision
+                    ↓
+   Documentation agent assembles six artifacts from only the
+              claims the Verifier accepted
+                    ↓
+User receives a cited, step-by-step government journey — Journey,
+Checklist, Evidence Report, Fee Estimate, Application Packet, Decision Log
+```
+
+No claim reaches the last step unless it survived retrieval from an
+allowlisted domain **and** the Verifier's audit — see
+[Why this is hard](#why-this-is-hard-the-hallucination-problem) for how that's
+enforced in code, not just in the prompt.
+
+---
+
 ## Why this is hard: the hallucination problem
 
 The central engineering problem is that a language model asked a factual
@@ -121,13 +163,13 @@ deterministic checks run first and are not delegated: a blank URL, an
 off-allowlist URL, or **a numeric claim whose figure does not appear in the
 cited passage** are all rejected in code before a model is consulted.
 
-That last rule exists because of a real trap found while building the corpus.
-The ZATCA *VAT Implementing Regulations* — a 162,000-character official PDF, the
-most authoritative-looking document in the entire corpus — refers to "the
-Mandatory Registration Threshold detailed in the Agreement" and **never states
-the number**. An agent citing it for "SAR 375,000" would be fabricating while
-appearing maximally rigorous. A test now asserts that document does *not* contain
-the figure, so the trap cannot silently reopen.
+This rule matters because not every authoritative-looking document actually
+states the number it implies. The ZATCA *VAT Implementing Regulations* — a
+162,000-character official PDF — refers to "the Mandatory Registration
+Threshold detailed in the Agreement" without stating the figure itself. A
+model citing it for "SAR 375,000" would be fabricating while appearing
+maximally rigorous, so the pipeline requires the exact figure to be present in
+the cited passage, not merely implied by an authoritative-sounding source.
 
 **Layer 5 — Honest failure reporting.** If the Verifier's audit cannot run —
 say the model provider returns HTTP 429 — the claims are withheld, but the
@@ -142,6 +184,15 @@ decision log says so in unmistakable terms:
 "Verification could not run" and "verification found nothing" produce identical
 numbers and mean opposite things. Conflating them is the worst failure this
 system could have, so it is called out explicitly.
+
+**Rate limiting is handled by failure type.** The free OpenRouter tier caps at
+50 requests per day (not per minute). A daily-cap rejection fails immediately
+with the reset time and the remedy; a per-minute throttle backs off and
+retries automatically.
+
+**The response cache never stores a failed call as a success.** Only a fully
+successful model response is cached; a 429, a timeout, or malformed JSON write
+nothing.
 
 ---
 
@@ -162,14 +213,14 @@ Two independently deployable backend services plus a React frontend:
                │ SSE + REST                          │ A2A delegation
                ▼                                     │ (card-discovered)
 ┌──────────────────────────────────────────────────┴─────────────────────┐
-│  Case Officer  :8000                                                    │
-│                                                                          │
-│  LangGraph StateGraph ─ intake → regulation → [municipal ∥ tax]         │
-│                       → verifier → gates → documentation                │
-│                                                                          │
-│  Tools: Tavily (allowlisted), local corpus (hybrid BM25 + dense),       │
-│         PyMuPDF document extraction, FastMCP execution adapter          │
-└──────────────────────────────────────────────────────────────────────────┘
+│  Case Officer  :8000                                                   │
+│                                                                        │
+│  LangGraph StateGraph ─ intake → regulation → [municipal, tax]         │
+│                       → verifier → gates → documentation               │
+│                                                                        │
+│  Tools: Tavily (allowlisted), local corpus (hybrid BM25 + dense),      │
+│         PyMuPDF document extraction, FastMCP execution adapter         │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Why two services?** The Municipal agent is a genuinely separate concern with a
@@ -178,6 +229,34 @@ boundary real rather than conventional. Its allowlist contains only
 `balady.gov.sa` and `momah.gov.sa`, so even a prompt-injection inside the
 municipal node cannot produce a ZATCA citation — the domain is not reachable
 from that process.
+
+### Architecture diagram
+
+```mermaid
+flowchart TD
+    U[User] --> FE[Frontend — React + Vite :5173]
+    FE -- SSE + REST --> CO[Case Officer :8000 — LangGraph]
+
+    CO --> IP[Intake & Planner]
+    IP --> RR[Regulation & Service Router — 6 sub-nodes]
+
+    RR --> AC[additional_context — open web, quarantined]
+    RR --> ML[Municipal & Location]
+    RR --> TF[Tax / Financial — plain Python, no LLM]
+
+    ML -- A2A delegation --> MS[Municipal & Location service :8001]
+
+    ML --> V[Verifier — hallucination firewall]
+    TF --> V
+
+    V --> HG{Conflicts?}
+    HG -- yes --> CR[Human: conflict resolution gate]
+    CR --> V
+    HG -- no --> AG[Human: approval gate]
+
+    AG --> DOC[Documentation — 6 artifacts]
+    DOC --> FE
+```
 
 ---
 
@@ -256,6 +335,36 @@ findings.
 
 ---
 
+## How the agent works
+
+What it receives, what it decides, what tools it uses, what it produces:
+
+```text
+User Request (intake form + optional lease PDF)
+     ↓
+Case Officer (LangGraph StateGraph)
+ ├── Intake & Planner       — extracts fields; no tools, no guessing
+ ├── Regulation Router      — search_gov_sources (Tavily, domain-locked)
+ │                            + local corpus hybrid search (BM25 + dense)
+ ├── Municipal & Location   — delegates over A2A to an independent service
+ ├── Tax / Financial        — deterministic Python, zero LLM in the decision
+ ├── Verifier               — audits every claim; detects document conflicts
+ └── Documentation          — assembles artifacts from accepted evidence only
+     ↓
+Human-in-the-loop gates (conflict resolution, then approval) — both are
+LangGraph interrupt() pauses, not suggestions a model could skip
+     ↓
+Six Artifacts: Journey · Checklist · Evidence Report · Fee Estimate ·
+Application Packet Draft · Decision Log
+```
+
+Every decision that touches a citation or a number is either grounded in a
+retrieved, allowlisted source or computed in plain code — never generated from
+the model's own training knowledge. See [Agent reference](#agent-reference) for
+the tools, model, and hard rules behind each node.
+
+---
+
 ## Agent reference
 
 ### 1. Intake & Planner
@@ -273,18 +382,18 @@ that it **must not guess**: an unstated city is listed in `missing_fields`, neve
 inferred. It is also forbidden from answering any regulatory question — that is
 another agent's job, with evidence.
 
-### 2. Regulation & Service Router *(five topic sub-nodes)*
+### 2. Regulation & Service Router *(six topic sub-nodes)*
 
 | | |
 |---|---|
 | **Role** | Determine what each agency requires, grounded only in retrieved allowlisted pages |
 | **Tools** | `search_gov_sources` (Tavily, `include_domains` locked), local corpus hybrid search |
-| **Model** | `nvidia/nemotron-3-ultra-550b-a55b:free` on every sub-node |
+| **Model** | `nvidia/nemotron-3-ultra-550b-a55b:free` on the five government-scoped sub-nodes |
 | **Output** | `RequirementItem[]` + `Evidence[]` |
 
-Every sub-node gets the strongest available model because citation discipline is
-where a weaker model fails first — by paraphrasing just past what the source
-actually said.
+Every government-scoped sub-node gets the strongest available model because
+citation discipline is where a weaker model fails first — by paraphrasing just
+past what the source actually said.
 
 Domain scope per sub-node:
 
@@ -299,6 +408,40 @@ Domain scope per sub-node:
 **The Router deliberately does not own `balady.gov.sa`.** Municipal requirements
 belong to the A2A service; leaving Balady here would have two components
 retrieving the same pages and double-reporting the licence.
+
+**A sixth sub-node, `additional_context`, is architecturally different from the
+other five.** It is the only retrieval node with **no government domain
+allowlist** — it searches the open web so non-government sources (consultancy
+guides, law-firm articles) can surface useful context an official page might
+not phrase plainly. Because that context can be genuinely useful but is
+categorically less trustworthy, its isolation from the verified pipeline is
+enforced in code, not by convention:
+
+- Its output lives in a separate field, `supplementary_context`, with **no code
+  path** that can write to `requirements` or `evidence_log`.
+- Its data type pins `confidence` to the literal `"LOW"` and `is_official` to
+  `False` at the schema level — assigning anything else fails Pydantic
+  validation at construction, so a wrong value cannot silently slip through.
+- It can never move `readiness_pct`. A test stuffs a case with ten
+  supplementary items and asserts readiness is unaffected.
+
+Because there is no domain allowlist to lean on, scoping this node to Saudi
+Arabia specifically required three independent layers rather than one:
+
+1. The search query itself contains "Saudi Arabia", biasing the search engine
+   before any model is involved.
+2. A code-level keyword check drops any result with no mention of Saudi
+   Arabia, KSA, the Kingdom, or a Saudi regulator — applied **twice**: once to
+   raw search results, and again to the claim the model writes, since a model
+   can summarise a Saudi page into a country-neutral sentence that would
+   otherwise slip past the first check. (`"Kingdom"` deliberately does not
+   match inside `"United Kingdom"` — a naive substring check would pass every
+   UK government page on that word alone.)
+3. The system prompt instructs the model to ignore other jurisdictions, as a
+   final layer rather than the only one.
+
+Tests prove the isolation with real non-Saudi pages (UAE, Egypt, UK) filtered
+entirely in code, model switched off.
 
 ### 3. Municipal & Location *(separate A2A service, port 8001)*
 
@@ -320,12 +463,26 @@ Two guardrails are enforced in code rather than trusted to the prompt:
   No function exists in the module to convert it into a score or recommendation,
   so it cannot be done by mistake.
 
-Geocoding is bounded to a per-city viewbox. Free-text geocoding once resolved
-"Al-Olaya, Riyadh" to Al Olaya in *Al Quwayiyah*, ~160 km away, and reported zero
-nearby competitors — a wrong location producing a confident number is worse than
-an obvious failure. Candidates outside the box are now discarded, district
-polygons are preferred over streets that share the name, and a weak match is
-labelled so the count can be discounted.
+Geocoding is bounded to a per-city viewbox, with district polygons preferred
+over streets that share the same name, so a district name cannot silently
+resolve to a same-named location elsewhere in the country. A weak or ambiguous
+match is labelled as such so the competitor count can be discounted rather
+than read as confident.
+
+The retrieval question asks what Balady publishes for commercial premises in
+general and which of it governs the stated activity, rather than requiring an
+exact match on category, district, and premises area simultaneously — a
+conditional requirement (one that applies only above a certain size, for
+example) is reported with the condition stated in its note, rather than being
+discarded for not matching every case detail at once. Retrieved regulatory
+pages are windowed to the passage relevant to the query before reaching the
+model, since a full page can run past 50,000 characters of largely unrelated
+municipal-service content. This node shares the same rate-limit backoff
+schedule as the rest of the system.
+
+Verified requirements returned by this service include the establishment
+record, exterior signboard, and lease or ownership documentation associated
+with a commercial activity's municipal licence.
 
 ### 4. Tax / Financial — **no model in the decision path**
 
@@ -513,6 +670,35 @@ which model each node runs on; that mapping lives at `GET /api/models`.
 Because a first run genuinely takes minutes, the UI shows an elapsed timer and
 sets expectations rather than implying a snappy response.
 
+**Results are presented in three sections**, replacing an earlier "Journey
+Roadmap" and a generic filterable evidence panel that had no real relationship
+to case state:
+
+- **"Regulations found"** — one card per agency (Ministry of Commerce,
+  Municipalities & Housing, SFDA, ZATCA, GOSI…), grouped by the entity the
+  *allowlist* assigns, never by anything a model produced. Each row shows the
+  requirement, a `VERIFIED` / `REQUIRED` / `UNVERIFIED` chip, the reason, a
+  retrieval-path badge (`Live` or `Corpus`), and a source link.
+- **"Non-government sources"** — sits inside the same section as the agency
+  cards but is deliberately muted grey with a dashed border and no glow, so it
+  can never be mistaken for one at a glance. Carries the `additional_context`
+  node's output: real source domain, a `LOW` badge, and the subtitle *"Not
+  verified against an official government source — for reference only."* No
+  verified/satisfied language appears anywhere in it.
+- **"Your Path"** — two columns, Completed and Missing, computed from
+  `requirement.status` rather than from citation presence alone: a requirement
+  only reads Completed once there is both an accepted citation *and* the
+  case's own data actually satisfies it (e.g. stated applicant age against a
+  stated minimum), not merely because nothing contradicts it. `unverified`
+  requirements appear in Missing, in amber, explicitly distinct from a red
+  action state — "we could not verify this" is an honest system state, not a
+  failure.
+
+The submission-confirmation view is guarded by an error boundary with its
+close controls rendered independently of the confirmation content, and a
+second boundary sits at the application root, so a display fault is always
+recoverable rather than leaving a dead end.
+
 ---
 
 ## Repository layout
@@ -531,8 +717,8 @@ Sdaia_capstone_project/
 │   │   │   ├── mcp/                  agent cards, auth-gated execution adapter
 │   │   │   └── config/               allowlist, category map, settings
 │   │   ├── scripts/collect_corpus.py Phase 0 corpus collector
-│   │   └── tests/                    302 tests
-│   └── municipal-location/           A2A microservice (:8001), 36 tests
+│   │   └── tests/                    343 tests
+│   └── municipal-location/           A2A microservice (:8001), 48 tests
 ├── frontend/                         React + Vite (:5173)
 │   └── src/
 │       ├── api/caseStream.ts         the only file that touches the network
@@ -545,6 +731,41 @@ Sdaia_capstone_project/
 
 ---
 
+## Agent stack
+
+```text
+LLM:
+OpenRouter (Nemotron model family — nano-9b, super-120b, ultra-550b, embed-1b)
+
+Agent Framework:
+LangGraph (StateGraph, explicit reducers, interrupt() for human-in-the-loop gates)
+
+Agent Protocol:
+A2A (Agent Card discovery + delegation, Municipal & Location service)
+
+API:
+FastAPI (Case Officer :8000, Municipal & Location :8001), Server-Sent Events for live agent status
+
+Tools:
+Tavily (allowlisted web search), FastMCP (auth-gated execution adapter), PyMuPDF (lease PDF extraction)
+
+Retrieval:
+Hybrid BM25 + dense embeddings (Reciprocal Rank Fusion) over a 16-page verified government corpus
+
+Observability:
+LangSmith (optional, full run tracing)
+
+Frontend:
+React 18 + Vite + Tailwind
+```
+
+Why these choices: search is Tavily specifically because it supports
+`include_domains`, which is the actual anti-hallucination enforcement point —
+not a general-purpose search API. Tax/VAT logic deliberately has **no LLM in
+the decision path** — see [Agent reference](#agent-reference) for why.
+
+---
+
 ## How to run
 
 ### Prerequisites
@@ -553,15 +774,17 @@ Sdaia_capstone_project/
 |---|---|
 | [uv](https://docs.astral.sh/uv/) | Python dependency management |
 | Node.js 18+ | Frontend |
-| An [OpenRouter](https://openrouter.ai) API key | All model calls |
-| A [Tavily](https://tavily.com) API key | Allowlisted live search |
-| *(optional)* LangSmith key | Tracing |
+| An [OpenRouter](https://openrouter.ai) API key | LLM model calls |
+| A [Tavily](https://tavily.com) API key | Allowlisted government-source search |
+| *(optional)* LangSmith API key | Run tracing and observability |
 
-### For GitHub users — from a fresh clone
+### 1. Clone the repository
 
 ```bash
-git clone <repo-url> && cd Sdaia_capstone_project
-```
+git clone <repository-url>
+cd Sdaia_capstone_project
+
+
 
 **1. Configure secrets.** Three `.env` files, one per service — each service gets
 only the secrets it needs:
@@ -625,25 +848,13 @@ cd frontend && npm run dev
 
 Open **http://localhost:5173**.
 
-### For the maintainer — already configured
-
-```bash
-cd /Users/talaalothaim/Desktop/Sdaia_capstone_project
-(cd backend/municipal-location && uv run uvicorn app.main:app --port 8001 &)
-(cd backend/case-officer       && uv run uvicorn app.main:app --port 8000 &)
-(cd frontend                   && npm run dev)
-```
-
-### Running a case
-
-1. Click **Fill in the intake form** (or use a suggested case on the hero).
-2. Required: goal, category, city, district, applicant status, area (sqm),
-   expected annual revenue.
-3. **Upload a lease PDF whose stated area differs from what you typed** — this
-   is what makes the discrepancy gate fire, and it is the centrepiece of the
-   demo. The backend parses it with PyMuPDF and shows the extracted area.
-4. **Analyse My Case** → watch the roster.
-5. Resolve the conflict → approve at the gate → artifacts render.
+> All three services can also be started in the background from the repository
+> root once dependencies are installed:
+> ```bash
+> (cd backend/municipal-location && uv run uvicorn app.main:app --port 8001 &)
+> (cd backend/case-officer       && uv run uvicorn app.main:app --port 8000 &)
+> (cd frontend                   && npm run dev)
+> ```
 
 ### Expect a long first run
 
@@ -655,13 +866,13 @@ trivial prompt. A case makes about seven.
 | Cold (empty caches) | up to ~7 minutes |
 | Warm (same case again) | ~80–95 seconds |
 
-**If you are recording a demo, do a full warm-up run first**, confirm it completed
-cleanly, then record the replay. Check `GET /health` → `llm_cache.entries` to
-confirm the cache is primed. Failed calls are not cached, so if a warm-up gets
-rate-limited part-way, run it again before recording.
 
-Adding a small amount of credit to the OpenRouter account raises the daily cap
-substantially and is the single easiest way to avoid a 429 mid-demo.
+**The free OpenRouter tier caps at 50 model requests per day** (not per
+minute), resetting at 00:00 UTC — roughly seven full cases. A per-minute
+throttle backs off and retries automatically (5s → 20s → 65s); a daily-cap
+rejection fails immediately with a message naming the reset time. Adding a
+small amount of credit (~$10) raises the daily cap to roughly 1,000/day and is
+the single easiest way to avoid running out mid-demo.
 
 ### Useful environment switches
 
@@ -683,6 +894,58 @@ cd backend/case-officer && uv run python scripts/collect_corpus.py
 
 Re-fetches all 16 pages and rewrites `data/gov_corpus/` with fresh provenance
 timestamps. Only allowlisted URLs are permitted; the script refuses anything else.
+
+---
+
+## Usage
+
+Once all three services are running (see [How to run](#how-to-run)):
+
+1. Open http://localhost:5173 and fill in the intake form — goal, category,
+   city, district, applicant status, area, and expected annual revenue.
+2. Optionally upload a lease PDF whose stated area differs from what you
+   typed, to see the discrepancy-detection gate fire. The backend parses it
+   with PyMuPDF and shows the extracted area.
+3. Click **Analyse My Case** and watch the agent roster update live.
+4. Resolve any conflict, approve at the gate, and the six artifacts render.
+
+Or drive it directly via the API:
+
+```bash
+curl -s localhost:8000/api/cases -H 'Content-Type: application/json' \
+  -d '{"intake":{"goal":"open a coffee shop","business_category":"food_beverage_fixed",
+       "city":"Riyadh","district":"Al-Olaya","applicant_status":"saudi_national",
+       "area_sqm_stated":120,"expected_annual_revenue_sar":450000}}'
+```
+
+This returns a `case_id` — stream its progress with:
+
+```bash
+curl -N localhost:8000/api/cases/<case_id>/stream
+```
+
+---
+
+## Example output
+
+<!-- Add 3–4 screenshots here: the intake form, the live Agent Activity roster
+     mid-run, the conflict-resolution modal (lease vs. stated area), and the
+     final artifact view (Journey / Evidence Report). Save images under
+     assets/ and reference them below. -->
+
+### Live agent roster
+
+![Agent roster](assets/agent-roster.png)
+
+### Conflict resolution gate
+
+![Conflict gate](assets/conflict-gate.png)
+
+### Evidence report
+
+Each accepted requirement lists its source entity, URL, and retrieval
+timestamp; rejected claims are shown too, with their rejection reason — the
+Verifier's work is only legible if you can see what it threw away.
 
 ---
 
@@ -771,27 +1034,35 @@ curl -s localhost:8000/api/debug/retrieve -H 'Content-Type: application/json' \
 ## Testing
 
 ```bash
-(cd backend/case-officer       && uv run pytest -q)   # 302 tests
-(cd backend/municipal-location && uv run pytest -q)   # 31 tests
+(cd backend/case-officer       && uv run pytest -q)   # 343 tests
+(cd backend/municipal-location && uv run pytest -q)   # 48 tests
 (cd backend/municipal-location && uv run pytest -m live -q)  # 5 live geocoding
 (cd frontend && npm run build)
 ```
 
-**338 tests.** The suite runs **offline by default** — live search and embeddings
+**391 backend tests.** The suite runs **offline by default** — live search and embeddings
 are disabled in `conftest.py` so results are deterministic whether or not real
 keys are present.
 
-The tests worth knowing about lock in findings that were discovered by running
-the system, not by reasoning about it:
+Coverage includes, among the full suite:
 
-- The VAT Implementing Regulations do **not** contain `375,000` — the
-  hallucination trap stays closed.
-- The corpus still contains the literal `exceed SAR 375,000`, justifying the
-  strict greater-than boundary.
-- A rate-limited audit reads as a system failure, never as a finding.
+- The VAT Implementing Regulations do **not** contain `375,000` — a citation
+  of that document for the figure is not possible.
+- The corpus contains the literal `exceed SAR 375,000`, matching the strict
+  greater-than boundary used in the threshold comparison.
+- A rate-limited audit is reported as a system failure, never as a finding.
 - `evilbalady.gov.sa`, `balady.gov.sa.attacker.com` and
   `https://balady.gov.sa@evil.com/` are all rejected by the allowlist.
-- Passage windowing finds phrases buried deep in real 162k-character documents.
+- Passage windowing correctly isolates the relevant section of documents up to
+  180,000 characters long.
+- `additional_context` items can never appear in accepted evidence or move
+  `readiness_pct`, even when a case includes ten of them.
+- Non-Saudi pages (UAE, Egypt, UK) are filtered out of `additional_context`
+  results by the code-level check alone, independent of the model.
+- The response cache never stores a 429, a timeout, or malformed JSON as if it
+  were a successful answer.
+- A daily rate-limit rejection and a per-minute throttle are handled
+  differently — the former fails immediately, the latter backs off.
 
 ---
 
@@ -808,24 +1079,74 @@ thing this project is arguing against.
 3. **SFDA has no corpus document.** Its e-service pages are client-rendered and
    yield no text. Food safety is live-search-only; if Tavily is unavailable that
    requirement correctly reports `unverified`.
-4. **Free-tier latency is the dominant constraint** — ~60–70s per model call.
-5. **No minor-applicant pathway.** If an applicant states an age under 18 the
+4. **Free-tier quota is the dominant practical constraint** — 50 model requests
+   per day, resetting 00:00 UTC, roughly seven full cases. A cold case takes up
+   to ~7 minutes; a repeat of the same case ~90 seconds from cache.
+5. **The lease-discrepancy resolution is not yet recorded as its own citable
+   evidence item** tagged `document`, so the Document category in "Regulations
+   found" currently stays empty even after a conflict is resolved.
+6. **For the food & beverage vertical, only 5 of the 6 Regulation Router nodes
+   run** — `intellectual_property` is scoped to professional-office cases by
+   design, not a gap.
+7. **No minor-applicant pathway.** If an applicant states an age under 18 the
    system declines to proceed and points at an official source rather than
    inventing a process.
-6. **Geocoding is approximate.** OSM often has only streets, not district
+8. **Geocoding is approximate.** OSM often has only streets, not district
    polygons, for Riyadh districts; weak matches are labelled so the competitor
    count can be discounted.
-7. **The execution adapter is a mock.** Nothing is ever filed with any agency.
-8. **`MemorySaver` checkpointing** — a case does not survive a backend restart.
-9. **The frontend renders four of the six artifacts.** Journey, evidence report,
-   audit log and packet gate are wired; the checklist and fee estimate are
-   fetched and held in state but have no component yet.
-10. **Not legal advice.** Every output is a research aid pointing at official
+9. **The execution adapter is a mock.** Nothing is ever filed with any agency.
+10. **`MemorySaver` checkpointing** — a case does not survive a backend restart.
+11. **The frontend renders four of the six artifacts.** Journey, evidence report,
+    audit log and packet gate are wired; the checklist and fee estimate are
+    fetched and held in state but have no component yet.
+12. **The submission auth token currently sits in the frontend `.env`** as a
+    demo shortcut (`VITE_MCP_AUTH_TOKEN`) — a real deployment would gate
+    submission server-side, never in a browser bundle.
+13. **Not legal advice.** Every output is a research aid pointing at official
     sources, and says so.
 
 ---
 
-## Reference documents
+## Demo
 
-- [`docs/GovFlow-KSA-Implementation-Plan (1).md`](<docs/GovFlow-KSA-Implementation-Plan (1).md>) — agent specs, system prompts, domain allowlist, field spec, theme
-- [`docs/GovFlow-KSA-Claude-Code-Handoff.md`](docs/GovFlow-KSA-Claude-Code-Handoff.md) — model picks, API keys, build order
+Presentation deck: `docs/Bosalah_Capstone.pptx`
+
+<!-- If you record a walkthrough video, add the link here:
+Demo: https://youtube.com/... -->
+
+---
+
+## Future work
+
+- Extend `category_map.py` beyond the two tested verticals (food & beverage,
+  food truck) and validate each new category end to end rather than assuming
+  the architecture generalises untested.
+- Build a corpus for cities beyond Riyadh so live search isn't the only path
+  outside the capital.
+- Wire the two remaining artifacts (checklist, fee estimate) to frontend
+  components — they're already computed and held in state.
+- Replace `MemorySaver` with persistent checkpointing so a case survives a
+  backend restart.
+- Resolve an SFDA corpus source once a text-extractable page is available, so
+  food safety isn't live-search-only.
+
+---
+
+## Team
+
+| Member | GitHub | Contribution |
+|---|---|---|
+| Tala Alothaim | [@talaafahad](https://github.com/talaafahad) | Backend, Testing |
+| Sadeem Alnassar | [@ksadeem992-art](https://github.com/ksadeem992-art) | Data, Testing |
+| Raghad Alotaibi | [@RaghadAlotaibi00](https://github.com/RaghadAlotaibi00) | Frontend, Testing |
+
+---
+
+## Course information
+
+Built as the capstone project for **Advanced Agentic AI Systems Engineering**
+(هندسة أنظمة الذكاء الاصطناعي الوكيلي المتقدمة), SDAIA Academy, August 2026.
+
+SDAIA Academy: https://github.com/SDAIAAcademy
+
+---
