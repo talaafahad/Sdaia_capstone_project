@@ -163,13 +163,13 @@ deterministic checks run first and are not delegated: a blank URL, an
 off-allowlist URL, or **a numeric claim whose figure does not appear in the
 cited passage** are all rejected in code before a model is consulted.
 
-That last rule exists because of a real trap found while building the corpus.
-The ZATCA *VAT Implementing Regulations* — a 162,000-character official PDF, the
-most authoritative-looking document in the entire corpus — refers to "the
-Mandatory Registration Threshold detailed in the Agreement" and **never states
-the number**. An agent citing it for "SAR 375,000" would be fabricating while
-appearing maximally rigorous. A test now asserts that document does *not* contain
-the figure, so the trap cannot silently reopen.
+This rule matters because not every authoritative-looking document actually
+states the number it implies. The ZATCA *VAT Implementing Regulations* — a
+162,000-character official PDF — refers to "the Mandatory Registration
+Threshold detailed in the Agreement" without stating the figure itself. A
+model citing it for "SAR 375,000" would be fabricating while appearing
+maximally rigorous, so the pipeline requires the exact figure to be present in
+the cited passage, not merely implied by an authoritative-sounding source.
 
 **Layer 5 — Honest failure reporting.** If the Verifier's audit cannot run —
 say the model provider returns HTTP 429 — the claims are withheld, but the
@@ -185,21 +185,14 @@ decision log says so in unmistakable terms:
 numbers and mean opposite things. Conflating them is the worst failure this
 system could have, so it is called out explicitly.
 
-**Two different failures were once conflated, too.** The free OpenRouter tier
-turned out to cap at 50 requests **per day**, not per minute. Early code
-treated a daily cap the same as a per-minute throttle — every node slept 90
-seconds and retried against the same exhausted, account-wide allowance, so a
-run took ten minutes to fail instead of failing fast. A daily-cap rejection now
-fails immediately with the reset time and the remedy; a genuine per-minute
-throttle still backs off and retries as before.
+**Rate limiting is handled by failure type.** The free OpenRouter tier caps at
+50 requests per day (not per minute). A daily-cap rejection fails immediately
+with the reset time and the remedy; a per-minute throttle backs off and
+retries automatically.
 
-**The response cache is verified to never replay a failure as a success.** The
-cache write sits strictly between a successful parse and the return — any
-exception skips it, and there is no other call site that writes to it. Tests
-pin this directly: a 429, a timeout, and malformed JSON each write nothing to
-the cache; a 429 followed later by a success stores only the success. Every
-live cache entry was audited by hand at least once to confirm none contain an
-error payload.
+**The response cache never stores a failed call as a success.** Only a fully
+successful model response is cached; a 429, a timeout, or malformed JSON write
+nothing.
 
 ---
 
@@ -220,14 +213,14 @@ Two independently deployable backend services plus a React frontend:
                │ SSE + REST                          │ A2A delegation
                ▼                                     │ (card-discovered)
 ┌──────────────────────────────────────────────────┴─────────────────────┐
-│  Case Officer  :8000                                                    │
-│                                                                          │
-│  LangGraph StateGraph ─ intake → regulation → [municipal ∥ tax]         │
-│                       → verifier → gates → documentation                │
-│                                                                          │
-│  Tools: Tavily (allowlisted), local corpus (hybrid BM25 + dense),       │
-│         PyMuPDF document extraction, FastMCP execution adapter          │
-└──────────────────────────────────────────────────────────────────────────┘
+│  Case Officer  :8000                                                   │
+│                                                                        │
+│  LangGraph StateGraph ─ intake → regulation → [municipal, tax]         │
+│                       → verifier → gates → documentation               │
+│                                                                        │
+│  Tools: Tavily (allowlisted), local corpus (hybrid BM25 + dense),      │
+│         PyMuPDF document extraction, FastMCP execution adapter         │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Why two services?** The Municipal agent is a genuinely separate concern with a
@@ -470,41 +463,26 @@ Two guardrails are enforced in code rather than trusted to the prompt:
   No function exists in the module to convert it into a score or recommendation,
   so it cannot be done by mistake.
 
-Geocoding is bounded to a per-city viewbox. Free-text geocoding once resolved
-"Al-Olaya, Riyadh" to Al Olaya in *Al Quwayiyah*, ~160 km away, and reported zero
-nearby competitors — a wrong location producing a confident number is worse than
-an obvious failure. Candidates outside the box are now discarded, district
-polygons are preferred over streets that share the name, and a weak match is
-labelled so the count can be discounted.
+Geocoding is bounded to a per-city viewbox, with district polygons preferred
+over streets that share the same name, so a district name cannot silently
+resolve to a same-named location elsewhere in the country. A weak or ambiguous
+match is labelled as such so the competitor count can be discounted rather
+than read as confident.
 
-**This node returned nothing for a while, and it turned out to be three
-compounding bugs, not one:**
+The retrieval question asks what Balady publishes for commercial premises in
+general and which of it governs the stated activity, rather than requiring an
+exact match on category, district, and premises area simultaneously — a
+conditional requirement (one that applies only above a certain size, for
+example) is reported with the condition stated in its note, rather than being
+discarded for not matching every case detail at once. Retrieved regulatory
+pages are windowed to the passage relevant to the query before reaching the
+model, since a full page can run past 50,000 characters of largely unrelated
+municipal-service content. This node shares the same rate-limit backoff
+schedule as the rest of the system.
 
-1. **The question was over-specific.** It asked what applies to *this*
-   category, in *this* district, at *this* exact square-metre figure — the
-   most granular binding of any node. Balady publishes requirements for
-   commercial premises generally and never names a district or a sqm number,
-   so a source failing to match all three read as a miss. The prompt now asks
-   what Balady publishes for commercial premises and which of it governs the
-   activity; case facts remain available for stating conditions in the note,
-   never as a filter on what gets reported.
-2. **The retrieved context was 183,000 characters.** Live Balady/momah pages
-   are service directories — two measured over 52,000 characters each, mostly
-   a catalogue of unrelated services (maps, panoramas, vehicle marking). The
-   whole page was being sent whole, so the licence requirements were buried.
-   Now windowed around the query: 183,299 → 9,579 characters, a 19× reduction
-   — the same class of bug as the Verifier's passage-windowing fix, in the
-   opposite direction (too much irrelevant content diluting the signal, rather
-   than too little of the right content reaching it).
-3. **This was the only model-calling node with no rate-limit handling at
-   all.** A 429 surfaced identically to "Balady genuinely publishes nothing" —
-   indistinguishable in the output. It now shares the same backoff schedule as
-   the Case Officer.
-
-Any one of these alone could produce a false "unverified" result; together
-they meant the node's output could not be trusted until all three were found
-and fixed. Real Balady requirements (establishment record, exterior signboard
-photo, lease/ownership contract) now surface correctly.
+Verified requirements returned by this service include the establishment
+record, exterior signboard, and lease or ownership documentation associated
+with a commercial activity's municipal licence.
 
 ### 4. Tax / Financial — **no model in the decision path**
 
@@ -716,18 +694,10 @@ to case state:
   action state — "we could not verify this" is an honest system state, not a
   failure.
 
-Four bugs found during frontend testing, worth knowing if they resurface:
-the Audit Log's "Invalid Date" traced to the frontend double-formatting an
-already-formatted timestamp before passing it to a date parser, not a backend
-timestamp gap; the Audit Log's apparent fade at the top and bottom of the list
-was a clipped fixed-height container, not a mask, now scrollable; the
-submission-confirmation modal once rendered a string character-by-character as
-a numbered list because it was passed a plain string instead of the key/value
-object it expects (now type-enforced at compile time); and a blank,
-unrecoverable screen after confirming submission meant React had unmounted the
-entire app — two error boundaries now contain that failure, one around the
-submission modal with its close controls rendered *outside* the boundary so a
-display fault can never trap the user again, and one at the app root.
+The submission-confirmation view is guarded by an error boundary with its
+close controls rendered independently of the confirmation content, and a
+second boundary sits at the application root, so a display fault is always
+recoverable rather than leaving a dead end.
 
 ---
 
@@ -896,19 +866,13 @@ trivial prompt. A case makes about seven.
 | Cold (empty caches) | up to ~7 minutes |
 | Warm (same case again) | ~80–95 seconds |
 
-**If you are recording a demo, do a full warm-up run first**, confirm it completed
-cleanly, then record the replay. Check `GET /health` → `llm_cache.entries` to
-confirm the cache is primed. Failed calls are not cached, so if a warm-up gets
-rate-limited part-way, run it again before recording.
 
 **The free OpenRouter tier caps at 50 model requests per day** (not per
-minute), resetting at 00:00 UTC — roughly seven full cases. The backend
-distinguishes the two failure modes rather than treating them the same: a
-per-minute throttle backs off and retries (5s → 20s → 65s); a daily-cap
-rejection fails **immediately** with a message naming the reset time, instead
-of the old behaviour of sleeping 90 seconds per node and burning ten minutes to
-fail anyway. Adding a small amount of credit (~$10) raises the daily cap to
-roughly 1,000/day and is the single easiest way to avoid running out mid-demo.
+minute), resetting at 00:00 UTC — roughly seven full cases. A per-minute
+throttle backs off and retries automatically (5s → 20s → 65s); a daily-cap
+rejection fails immediately with a message naming the reset time. Adding a
+small amount of credit (~$10) raises the daily cap to roughly 1,000/day and is
+the single easiest way to avoid running out mid-demo.
 
 ### Useful environment switches
 
@@ -1080,27 +1044,25 @@ curl -s localhost:8000/api/debug/retrieve -H 'Content-Type: application/json' \
 are disabled in `conftest.py` so results are deterministic whether or not real
 keys are present.
 
-The tests worth knowing about lock in findings that were discovered by running
-the system, not by reasoning about it:
+Coverage includes, among the full suite:
 
-- The VAT Implementing Regulations do **not** contain `375,000` — the
-  hallucination trap stays closed.
-- The corpus still contains the literal `exceed SAR 375,000`, justifying the
-  strict greater-than boundary.
-- A rate-limited audit reads as a system failure, never as a finding.
+- The VAT Implementing Regulations do **not** contain `375,000` — a citation
+  of that document for the figure is not possible.
+- The corpus contains the literal `exceed SAR 375,000`, matching the strict
+  greater-than boundary used in the threshold comparison.
+- A rate-limited audit is reported as a system failure, never as a finding.
 - `evilbalady.gov.sa`, `balady.gov.sa.attacker.com` and
   `https://balady.gov.sa@evil.com/` are all rejected by the allowlist.
-- Passage windowing finds phrases buried deep in real 162k-character documents,
-  and separately, in real 183k-character Balady/momah service-directory pages.
+- Passage windowing correctly isolates the relevant section of documents up to
+  180,000 characters long.
 - `additional_context` items can never appear in accepted evidence or move
-  `readiness_pct`, even when a case is stuffed with ten of them.
-- Real non-Saudi pages (UAE, Egypt, UK) are filtered out of
-  `additional_context` results by the code-level check alone, model switched
-  off — including the `"Kingdom"` / `"United Kingdom"` false-positive case.
+  `readiness_pct`, even when a case includes ten of them.
+- Non-Saudi pages (UAE, Egypt, UK) are filtered out of `additional_context`
+  results by the code-level check alone, independent of the model.
 - The response cache never stores a 429, a timeout, or malformed JSON as if it
   were a successful answer.
-- A daily rate-limit rejection and a per-minute throttle are distinguished and
-  handled differently — the former fails immediately, the latter backs off.
+- A daily rate-limit rejection and a per-minute throttle are handled
+  differently — the former fails immediately, the latter backs off.
 
 ---
 
